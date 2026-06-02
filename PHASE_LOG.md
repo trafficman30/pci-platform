@@ -377,3 +377,97 @@ xkop.o.101 = pci.ug405, pci.offline
 **Outstanding:**
 - Phase 5 complete. Next: Phase 6 (log management) or Phase 7 (ARM64 field
   deployment) as directed.
+
+---
+
+## 2026-06-02 — Phase 6 complete
+
+### Phase 6.0 — shared/log.py  ✓ COMPLETE
+
+**Built:**
+- `shared/log.py` — `setup(service_name, level='INFO')` function
+  Three handlers on root logger:
+  1. `StreamHandler` (console) at specified level
+  2. `RotatingFileHandler` → `/opt/pci/logs/<service_name>.log`, DEBUG, 10 MB × 5
+  3. `FileHandler` (append) → `/opt/pci/logs/pci.log`, DEBUG — multi-process safe
+
+**Format matches CM5 exactly:**
+```
+'%(asctime)s [%(name)-8s] %(levelname)-5s %(message)s'
+'%Y-%m-%d %H:%M:%S'
+logging.Formatter.converter = time.localtime
+```
+Werkzeug suppressed to ERROR, urllib3 to WARNING — same as CM5.
+
+**All 9 entry points replaced:** `iobus/server.py`, `mova/kernel_main.py`,
+`autodim/service.py`, `ug405/service.py`, `rtig/service.py`, `offline/service.py`,
+`agd/service.py`, `flir/service.py`, `web/web_main.py`.
+Each now calls `from pci.shared.log import setup; setup('pci.xxx')`.
+
+**Log level fixes:**
+- `rtig/service.py`: TLP received, rule match count, PULSE ON/OFF → info (were debug)
+- `ug405/protocol/rbe.py`: INFORM acknowledged → info; no ACK → warning (were debug)
+- `offline/service.py`: opMode change in UG405OpModeTracker → info (was debug)
+- `agd/service.py`: zone detection state change → info (was missing)
+- `flir/service.py`: Presence/Pedestrian event → info (was missing; DilemmaZone already info)
+
+### Phase 6.1 + 6.2 — rotate_logs.sh + systemd units  ✓ COMPLETE
+
+**Built:**
+- `tools/rotate_logs.sh` — gzips `stream_*.jsonl` (previous days only), deletes
+  `stream_*.jsonl.gz` older than 30 days. LOG_DIR from arg or `$MOVA_LOG_DIR`
+  or `/opt/pci/logs/mova`. Uses `set -euo pipefail`.
+- `/etc/systemd/system/pci-rotate-logs.timer` — `OnCalendar=*-*-* 00:05:00`,
+  `Persistent=true` (catches up missed runs)
+- `/etc/systemd/system/pci-rotate-logs.service` — `Type=oneshot`
+
+**Decisions:**
+- Script uses `stream_*.jsonl` pattern matching actual StreamLogger output, not
+  the `pci.mova.N_...` names shown in the original ARCHITECTURE.md diagram.
+  ARCHITECTURE.md updated to reflect actual filename.
+- `Persistent=true` ensures rotation runs after any downtime at midnight.
+
+### Phase 6.3 — driver_sim.py replay mode  ✓ COMPLETE
+
+**Built:**
+- Extended `driver_sim.py` with `_replay_loop()` and updated `_load()`.
+- Activated via `[replay]` section in `signals.cfg`:
+  ```ini
+  [replay]
+  file  = /opt/pci/recordings/junction_a.jsonl
+  speed = 1.0
+  loop  = true
+  ```
+- Recording format: `{"ts": <float>, "n": "<signal_name>", "v": <0|1>}`
+- Replay maintains relative timing between events, divided by speed multiplier.
+- Registers any signal names from recording not already owned — `ValueError`
+  caught silently (non-pci.iobus signals rejected at write time).
+- Existing `_pulse_loop()` unchanged. Replay only activates if `[replay]` present.
+
+**Test results:**
+- End-to-end test: 4-event recording, speed=10×, loop=false.
+  Received: `[('crb', 1), ('det.0', 1), ('det.0', 0), ('det.1', 1), ('det.1', 0)]` ✓
+
+### Phase 6.4 — driver_recorder.py  ✓ COMPLETE
+
+**Built:**
+- `iobus/driver_recorder.py` — new file, same `start(table, config_path)` interface.
+- Activated by `driver = recorder` in `platform.cfg [iobus]`.
+- Config in `signals.cfg [recorder]` section: `file=`, `signals=` (optional filter).
+- Uses `table.subscribe(cb)` — fires synchronously on every signal state change
+  (signal table does not fire subscribers for no-change writes).
+- File opened with `buffering=1` (line-buffered) — each event reaches OS page cache
+  immediately, preventing loss on crash without explicit flush calls.
+
+**Decisions:**
+- Records conditioned values (post-inversion/scaling) — what services read.
+  For binary detector signals with inversion-only conditioning, double-inversion
+  is identity so record→replay is bit-perfect. Scaling is a known limitation.
+- `driver_recorder.py` covers all replay use cases (TLC inputs, MOVA detectors,
+  UTC session replay). No separate UG405 SNMP SET recorder needed.
+
+**Test results:**
+- Filter test: det.0 and det.1 in table, filter=det.0 only. Wrote det.0=1,
+  det.1=1 (filtered), det.0=0. Recorded: `[{det.0,1}, {det.0,0}]` ✓
+
+**All import checks passed clean.** 15 files changed (283 insertions, 63 deletions).
