@@ -15,8 +15,9 @@ import configparser
 
 import uvicorn
 
-from pci.mova.ipc.client import KernelRegistry
-from pci.web.api.app import create_app
+from pci.mova.ipc.client  import KernelRegistry
+from pci.ug405.ipc.client import UG405Client
+from pci.web.api.app      import create_app
 
 _PLATFORM_CFG = os.path.join(os.path.dirname(__file__), '..', 'config', 'platform.cfg')
 
@@ -41,8 +42,9 @@ def main():
     stream_ids = _stream_ids()
     log.info("connecting to MOVA stream IDs: %s", stream_ids)
 
-    registry = KernelRegistry(stream_ids)
-    app      = create_app(registry)
+    registry     = KernelRegistry(stream_ids)
+    ug405_client = UG405Client()
+    app          = create_app(registry, ug405_client=ug405_client)
 
     port = int(os.getenv('PCI_WEB_PORT', '8081'))
     uvicorn.run(app, host='0.0.0.0', port=port, log_level='info')

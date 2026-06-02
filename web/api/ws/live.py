@@ -12,13 +12,19 @@ from fastapi.responses import StreamingResponse
 
 log = logging.getLogger('pci.web.sse')
 
-router    = APIRouter()
-_registry = None
+router         = APIRouter()
+_registry      = None
+_ug405_client  = None
 
 
 def set_registry(r):
     global _registry
     _registry = r
+
+
+def set_ug405_client(c):
+    global _ug405_client
+    _ug405_client = c
 
 
 @router.get("/mova/{stream_id}")
@@ -47,6 +53,39 @@ async def mova_sse(stream_id: int):
             pass
         finally:
             client.unsubscribe(q)
+
+    return StreamingResponse(
+        generate(),
+        media_type = "text/event-stream",
+        headers    = {
+            "Cache-Control"   : "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/ug405")
+async def ug405_sse():
+    if _ug405_client is None:
+        raise HTTPException(503, "ug405 client not initialised")
+
+    q = _ug405_client.subscribe()
+
+    async def generate():
+        loop = asyncio.get_event_loop()
+        try:
+            while True:
+                try:
+                    ev = await loop.run_in_executor(
+                        None, lambda: q.get(block=True, timeout=25)
+                    )
+                    yield f"data: {json.dumps(ev, default=str)}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _ug405_client.unsubscribe(q)
 
     return StreamingResponse(
         generate(),
