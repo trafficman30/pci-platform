@@ -604,7 +604,7 @@ Do not infer signal names from memory.
 ```
 3.1  driver_xkop.py — TCP client to TLC XKOP server    ✓ COMPLETE
 3.2  driver_rpdb.py — TCP client to TLC RPDB server     ✓ COMPLETE
-3.3  driver_gpio.py — CM5 GPIO pins
+3.3  driver_gpio.py — CM5 GPIO pins                     ✓ COMPLETE
 ```
 
 #### Phase 3.1 implementation notes
@@ -658,6 +658,30 @@ TLC UTC mode drops when multiple XIN bits change together.
 - `io.registered_signals()` → scan signals.cfg for rpdb.o.* signals
 - Config from `config/rpdb.cfg` (separate file — subscriptions/names/outputs
   sections are too complex for platform.cfg)
+
+#### Phase 3.3 implementation notes
+
+**Activation:** set `driver = gpio` in `config/platform.cfg` `[iobus]` section.
+
+**Config:** `[gpio]` section in `signals.cfg`. Direction inferred from signal
+name (`gp.i.*` = in, `gp.o.*` = out). Value is the BCM GPIO number:
+```
+[gpio]
+gp.i.0 = 17
+gp.o.0 = 22
+```
+
+**Fail-silent on dev:** any pin that fails to export is skipped with a warning.
+If no pins export successfully the driver starts with empty sets and does nothing.
+On SER5 LXC dev machine, the sysfs export file is read-only — all pins are
+skipped automatically. On CM5 field hardware, exports succeed normally.
+
+**No library dependencies.** Uses `/sys/class/gpio` sysfs via plain Python
+file I/O. No gpiod, no gpioget/gpioset.
+
+**Signal use:** GPIO is for slow signals only — photocells, panel switches,
+status inputs, enable/inhibit lines. 20ms polling is adequate.
+Do NOT use GPIO for vehicle detection — detection pulses require RPDB or XKOP.
 
 #### XKOP driver reference — derived from /opt/CM5/io/io_xkop.py
 
