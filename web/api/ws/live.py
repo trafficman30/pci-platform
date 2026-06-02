@@ -16,7 +16,8 @@ router          = APIRouter()
 _registry       = None
 _ug405_client   = None
 _rtig_client    = None
-_autodim_client = None
+_autodim_client  = None
+_offline_client  = None
 
 
 def set_registry(r):
@@ -37,6 +38,11 @@ def set_rtig_client(c):
 def set_autodim_client(c):
     global _autodim_client
     _autodim_client = c
+
+
+def set_offline_client(c):
+    global _offline_client
+    _offline_client = c
 
 
 @router.get("/mova/{stream_id}")
@@ -98,6 +104,39 @@ async def rtig_sse():
             pass
         finally:
             _rtig_client.unsubscribe(q)
+
+    return StreamingResponse(
+        generate(),
+        media_type = "text/event-stream",
+        headers    = {
+            "Cache-Control"   : "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/offline")
+async def offline_sse():
+    if _offline_client is None:
+        raise HTTPException(503, "offline client not initialised")
+
+    q = _offline_client.subscribe()
+
+    async def generate():
+        loop = asyncio.get_event_loop()
+        try:
+            while True:
+                try:
+                    ev = await loop.run_in_executor(
+                        None, lambda: q.get(block=True, timeout=25)
+                    )
+                    yield f"data: {json.dumps(ev, default=str)}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _offline_client.unsubscribe(q)
 
     return StreamingResponse(
         generate(),

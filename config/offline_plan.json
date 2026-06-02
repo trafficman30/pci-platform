@@ -1,0 +1,12 @@
+{
+  "_comment": "Offline fixed-time plan. Uncomment and configure for deployment.",
+  "settings": {
+    "base_time_mode": "time",
+    "base_time": "0000",
+    "active_in_modes": [1, 2]
+  },
+  "timetable": [
+  ],
+  "scns": {
+  }
+}

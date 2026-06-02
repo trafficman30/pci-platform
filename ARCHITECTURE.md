@@ -353,7 +353,18 @@ Any write attempt from a non-owner is rejected by IOBus.
 Some output signals may be shared between services where the deployment
 requires it — for example, stage force outputs may be controlled by MOVA,
 UG405, or offline plans depending on which service is in control at the time.
-Shared ownership is defined in `config/signals.cfg` per deployment.
+Shared ownership is defined in `config/signals.cfg` using a comma-separated
+list of service names:
+
+```ini
+[signals]
+xkop.o.101 = pci.ug405, pci.offline    # both services may write
+xkop.o.102 = pci.ug405, pci.offline
+```
+
+The IOBus server stores shared owners as a frozenset. Any service in the set
+may write; non-listed services are rejected as before. Services take turns
+writing based on opMode — there is no arbitration in the IOBus itself.
 
 ### Signal allocations — deployment config, not defined here
 
@@ -849,7 +860,7 @@ are needed. Wait for confirmation before writing.
 ```
 5.1  pci.rtig  — HTTP receiver on :9010 inside pci.web, W writes to IOBus  ✓ COMPLETE
 5.2  pci.autodim                                                             ✓ COMPLETE
-5.3  pci.offline
+5.3  pci.offline                                                             ✓ COMPLETE
 5.4  pci.agd / pci.flir
 ```
 

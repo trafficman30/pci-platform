@@ -232,5 +232,71 @@ Append-only. Do not overwrite entries. One entry per session.
 - No runtime test yet (requires IOBus running on dev host).
 
 **Outstanding for next session:**
-- Phase 5.3: pci.offline
+- Phase 5.4: pci.agd / pci.flir
+
+---
+
+## 2026-06-02 — Phase 5.3 complete
+
+### IOBus shared ownership extension
+
+**Built:**
+- `iobus/server.py` — `SignalTable._owners` now supports `str | frozenset[str]`.
+  `load_config()` parses comma-separated owner values as frozenset.
+  `register()` allows re-registration by any declared co-owner.
+  `write()` accepts source if it is in the frozenset.
+  Single-owner behaviour unchanged.
+- `ARCHITECTURE.md` — signal ownership section updated with comma-separated
+  format and usage example. IOBus note added: no arbitration — services take
+  turns based on opMode.
+
+**Signals.cfg format for shared signals:**
+```ini
+xkop.o.101 = pci.ug405, pci.offline
+```
+
+### Phase 5.3 — pci.offline UTC offline plan player  ✓ COMPLETE
+
+**Built:**
+- `offline/__init__.py`, `offline/ipc/__init__.py`
+- `offline/iobus_client.py` — `OfflineIOBus`: write-only `IOBusClient('pci.offline')`.
+- `offline/ipc/server.py` — `IPCServer`: push socket `/tmp/pci.offline.live.sock`
+  + command socket `/tmp/pci.offline.cmd.sock`.
+  Commands: PING → pong, RELOAD → force plan file reload + state clear.
+  1Hz snapshot push.
+- `offline/ipc/client.py` — `OfflineClient` for web process (same pattern as RTIGClient).
+- `offline/service.py` — `OfflinePlanService` + `UG405OpModeTracker`.
+  1-second tick loop. Hot-reload on plan file mtime change.
+  Timetable resolution with midnight carryover (ported verbatim from CM5).
+  Three cycle position modes: datetime, time, none.
+  Anti-drop bitmask write pattern (set 1s first, clear 0s second).
+  opMode from UG405OpModeTracker — subscribes to `/tmp/pci.ug405.live.sock`,
+  defaults to opMode=1 (standalone, plans run) on disconnect.
+  Entry point: `python -m pci.offline.service`.
+- `config/offline.cfg` — plan_file, ug405_cfg paths.
+- `config/offline_plan.json` — empty template (settings, timetable, scns).
+- `web/api/routes/offline.py` — REST at `/api/offline` (ping, reload).
+- `web/api/ws/live.py` — `/sse/offline` SSE endpoint added.
+- `web/api/app.py` — `offline_client` parameter added.
+- `web/web_main.py` — `OfflineClient()` created on startup.
+
+**Decisions:**
+- Signal ownership: shared between pci.ug405 and pci.offline in signals.cfg
+  (comma-separated). IOBus extended to support this. Services take turns based
+  on opMode — no simultaneous write conflict in practice.
+- opMode tracking: subscribe to pci.ug405 live IPC socket. Any JSON message
+  with 'opmode' key updates local state. Disconnect → default to 1 (standalone).
+  Safest default: plans activate when ug405 not running.
+- SCN/control signal maps: pci.offline reads the same ug405.cfg as pci.ug405
+  (shared config file, not coupling). Override via PCI_UG405_CFG env var.
+- Plan file: standalone JSON at config/offline_plan.json. Override via
+  PCI_OFFLINE_CFG env var (path to offline.cfg) or plan_file in offline.cfg.
+
+**Test results:**
+- IOBus shared ownership: all assertions passed (frozenset write, single-owner
+  rejection, single-owner unchanged).
+- Import check passed clean: all offline and updated web modules imported.
+- No runtime test yet (requires IOBus + pci.ug405 running on dev host).
+
+**Outstanding for next session:**
 - Phase 5.4: pci.agd / pci.flir

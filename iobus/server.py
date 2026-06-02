@@ -35,12 +35,13 @@ class SignalTable:
     """
     In-memory signal table.  Drivers write raw values directly; all readers
     (socket clients and drivers) receive conditioned values.
-    One registered owner per signal; non-owner writes are rejected.
+    Owner per signal enforced on write.  Shared ownership (frozenset) is
+    supported: any service in the set may write.  See load_config().
     """
 
     def __init__(self):
         self._values = {}    # name → raw int
-        self._owners = {}    # name → str
+        self._owners = {}    # name → str | frozenset[str]
         self._cond   = {}    # name → {'invert': bool, 'scale': float}
         self._subs   = []    # change callbacks: fn(name, conditioned_value, source)
         self._lock   = threading.Lock()
@@ -48,13 +49,17 @@ class SignalTable:
     def register(self, name, owner, *, invert=False, scale=1.0):
         with self._lock:
             existing = self._owners.get(name)
-            if existing and existing != owner:
-                raise ValueError(
-                    f"signal '{name}' already owned by '{existing}', "
-                    f"cannot register for '{owner}'"
-                )
+            if existing is not None:
+                existing_set = existing if isinstance(existing, frozenset) else frozenset({existing})
+                new_set      = owner    if isinstance(owner,    frozenset) else frozenset({owner})
+                if not new_set.issubset(existing_set):
+                    raise ValueError(
+                        f"signal '{name}' already owned by '{existing}', "
+                        f"cannot register for '{owner}'"
+                    )
             self._values.setdefault(name, 0)
-            self._owners[name] = owner
+            if existing is None:
+                self._owners[name] = owner
             c = {}
             if invert:
                 c['invert'] = True
@@ -70,7 +75,8 @@ class SignalTable:
             if owner is None:
                 log.warning("rejected write '%s' by '%s' — not registered", name, source)
                 return False
-            if owner != source:
+            owners = owner if isinstance(owner, frozenset) else frozenset({owner})
+            if source not in owners:
                 log.warning("rejected write '%s' by '%s' — owner is '%s'",
                             name, source, owner)
                 return False
@@ -238,8 +244,14 @@ def load_config(path):
 
     signals = {}
     if cfg.has_section('signals'):
-        for name, owner in cfg.items('signals'):
-            signals[name] = {'owner': owner.strip()}
+        for name, owner_raw in cfg.items('signals'):
+            owner_str = owner_raw.strip()
+            # Comma-separated → shared ownership (any listed service may write)
+            if ',' in owner_str:
+                owner = frozenset(o.strip() for o in owner_str.split(',') if o.strip())
+            else:
+                owner = owner_str
+            signals[name] = {'owner': owner}
 
     if cfg.has_section('conditioning'):
         for name, spec in cfg.items('conditioning'):

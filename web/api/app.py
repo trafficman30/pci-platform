@@ -13,17 +13,20 @@ from pci.web.api.routes.mova    import router as mova_router,    set_registry as
 from pci.web.api.routes.ug405   import router as ug405_router,   set_client   as ug405_set_client
 from pci.web.api.routes.rtig    import router as rtig_router,    set_client   as rtig_set_client, create_receiver_app
 from pci.web.api.routes.autodim import router as autodim_router, set_client   as autodim_set_client
+from pci.web.api.routes.offline import router as offline_router, set_client   as offline_set_client
 from pci.web.api.ws.live        import (router as sse_router,    set_registry as sse_set_reg,
                                         set_ug405_client   as sse_set_ug405,
                                         set_rtig_client    as sse_set_rtig,
-                                        set_autodim_client as sse_set_autodim)
+                                        set_autodim_client as sse_set_autodim,
+                                        set_offline_client as sse_set_offline)
 
 log = logging.getLogger('pci.web')
 
 _STATIC = os.path.join(os.path.dirname(__file__), '..', 'static')
 
 
-def create_app(registry, ug405_client=None, rtig_client=None, autodim_client=None):
+def create_app(registry, ug405_client=None, rtig_client=None,
+               autodim_client=None, offline_client=None):
     mova_set_reg(registry)
     sse_set_reg(registry)
     if ug405_client is not None:
@@ -35,6 +38,9 @@ def create_app(registry, ug405_client=None, rtig_client=None, autodim_client=Non
     if autodim_client is not None:
         autodim_set_client(autodim_client)
         sse_set_autodim(autodim_client)
+    if offline_client is not None:
+        offline_set_client(offline_client)
+        sse_set_offline(offline_client)
 
     app = FastAPI(title="PCI Web", version="2.0.0")
 
@@ -50,6 +56,7 @@ def create_app(registry, ug405_client=None, rtig_client=None, autodim_client=Non
     app.include_router(ug405_router,   prefix="/api/ug405",   tags=["UG405"])
     app.include_router(rtig_router,    prefix="/api/rtig",    tags=["RTIG"])
     app.include_router(autodim_router, prefix="/api/autodim", tags=["Autodim"])
+    app.include_router(offline_router, prefix="/api/offline", tags=["Offline"])
     app.include_router(sse_router,     prefix="/sse",         tags=["SSE"])
 
     if os.path.isdir(_STATIC):
