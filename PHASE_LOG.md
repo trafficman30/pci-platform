@@ -137,4 +137,49 @@ Append-only. Do not overwrite entries. One entry per session.
 - No runtime test yet (requires pci.ug405 service running on the dev host).
 
 **Outstanding for next session:**
-- Phase 5.1: pci.rtig — read /opt/CM5/rtig/ first
+- Phase 5.2: pci.autodim — read /opt/CM5/autodim/ first
+- Phase 5.3: pci.offline
+- Phase 5.4: pci.agd / pci.flir
+
+---
+
+## 2026-06-02 — Phase 5.1 complete
+
+### Phase 5.1 — pci.rtig RTIG TLP adapter  ✓ COMPLETE
+
+**Built:**
+- `rtig/service.py` — `RTIGService`: XML parser, rule matcher, `PulseEngine`
+  (timed IOBus write 1 → write 0), TLP log (50 entries deque), snapshot.
+  Rule matching ported verbatim from CM5 including comparator objects.
+  Entry point: `python -m pci.rtig.service`
+- `rtig/iobus_client.py` — `RTIGIOBus`: write-only wrapper, no reads, no subscribe.
+  HELLO pci.rtig — ownership enforced server-side.
+- `rtig/ipc/server.py` — push socket `/tmp/pci.rtig.live.sock`,
+  command socket `/tmp/pci.rtig.cmd.sock`.
+  Commands: `PING`, `RECEIVE <xml_line>`, `RELOAD_RULES`.
+- `rtig/ipc/client.py` — `RTIGClient` for web process (singleton, fixed paths).
+- `web/api/routes/rtig.py` — REST router at `/api/rtig` (ping, reload_rules)
+  + `create_receiver_app()` — minimal FastAPI app for port 9010.
+- `web/api/ws/live.py` — `/sse/rtig` SSE endpoint added.
+- `web/api/app.py` — `create_app(registry, ug405_client, rtig_client)`.
+- `web/web_main.py` — two uvicorn servers in one asyncio event loop:
+  main UI on port 8080/8081, RTIG HTTP receiver on port 9010.
+  `asyncio.wait(FIRST_COMPLETED)` ensures clean shutdown when main server exits.
+- `config/rtig.cfg` — pulse_seconds, rules_file, signal_map (deployment-specific).
+- `config/rtig_rules.json` — empty rules array (deployment populates).
+- `config/platform.cfg` — `[rtig]` section added with `http_port = 9010`.
+
+**Decisions:**
+- HTTP receiver runs inside pci.web on port 9010 (honours "only web serves HTTP" rule).
+  Port 9010 is fixed by network routing/firewall on field deployments — cannot change.
+- Two uvicorn.Server instances in one asyncio.gather via asyncio.wait(FIRST_COMPLETED).
+  rtig_srv.install_signal_handlers=False — only main server handles SIGTERM.
+- TLP XML is flattened to a single line before forwarding via IPC command socket
+  (XML is always a single self-closing <rtig_tlp .../> tag — safe to flatten).
+- signal_map in rtig.cfg uses lowercase section name `[signal_map]` (configparser
+  lowercases keys by default).
+- Config path defaults to /opt/pci/config/rtig.cfg; override via PCI_RTIG_CFG.
+
+**Test results:**
+- Import check passed clean.
+- No runtime test yet (requires pci.rtig service + IOBus running on dev host).
