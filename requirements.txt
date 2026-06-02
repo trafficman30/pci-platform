@@ -11,3 +11,5 @@ uvicorn[standard]
 # snake_case, blocking runDispatcher() replaced by asyncio event loop.
 pysnmp==4.4.12
 pyasn1==0.4.8
+# Phase 5.2 (autodim):
+astral

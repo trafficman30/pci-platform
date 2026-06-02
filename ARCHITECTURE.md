@@ -847,11 +847,36 @@ Summarise what it does and what PCI adaptations
 are needed. Wait for confirmation before writing.
 
 ```
-5.1  pci.rtig  — TCP server, validates messages, W writes to IOBus
+5.1  pci.rtig  — HTTP receiver on :9010 inside pci.web, W writes to IOBus  ✓ COMPLETE
 5.2  pci.autodim
 5.3  pci.offline
 5.4  pci.agd / pci.flir
 ```
+
+#### Phase 5.2 autodim — pre-write notes (read /opt/CM5/autodim/ before writing)
+
+**What it does:** Astronomical dim/bright controller. Uses `astral` (lat/lon) to
+calculate daily sunrise/sunset. Applies minute offsets to get dim_utc (sunset +
+offset) and bright_utc (sunrise + offset). Writes 1 (dim) or 0 (bright) to one
+IOBus output signal on a 30-second loop.
+
+**Algorithm:**
+```
+is_dim = (now >= dim_utc) OR (now < bright_utc)
+```
+
+**PCI adaptations:**
+- Drop `io.register()` / `io.unregister()` — not in PCI IOBus; ownership is
+  static in signals.cfg. Declare autodim output signal as owned by `pci.autodim`.
+- IOBus client: `IOBusClient('pci.autodim')` — write(sig, val) + batch([sig]).
+- IPC push socket: autodim/ipc/server.py + client.py (same pattern as ug405/rtig).
+  Push 1Hz snapshots + immediate event on dim/bright transition.
+- Config: /opt/pci/config/autodim.cfg — lat, lon, dim_offset, bright_offset,
+  signal, enabled. Override via PCI_AUTODIM_CFG.
+- save_autodim() ports unchanged — same file I/O, different path.
+
+**Dependency:** `astral` — added to requirements.txt.
+**TODO before writing:** confirm `astral` installs cleanly in the venv.
 
 ### Phase 6 — Log management
 
