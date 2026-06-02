@@ -13,3 +13,6 @@ pysnmp==4.4.12
 pyasn1==0.4.8
 # Phase 5.2 (autodim):
 astral
+# Phase 5.4 (AGD + FLIR adapters):
+pyzmq
+websocket-client

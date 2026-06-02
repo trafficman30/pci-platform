@@ -18,6 +18,8 @@ _ug405_client   = None
 _rtig_client    = None
 _autodim_client  = None
 _offline_client  = None
+_agd_client      = None
+_flir_client     = None
 
 
 def set_registry(r):
@@ -43,6 +45,16 @@ def set_autodim_client(c):
 def set_offline_client(c):
     global _offline_client
     _offline_client = c
+
+
+def set_agd_client(c):
+    global _agd_client
+    _agd_client = c
+
+
+def set_flir_client(c):
+    global _flir_client
+    _flir_client = c
 
 
 @router.get("/mova/{stream_id}")
@@ -170,6 +182,72 @@ async def autodim_sse():
             pass
         finally:
             _autodim_client.unsubscribe(q)
+
+    return StreamingResponse(
+        generate(),
+        media_type = "text/event-stream",
+        headers    = {
+            "Cache-Control"   : "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/agd")
+async def agd_sse():
+    if _agd_client is None:
+        raise HTTPException(503, "agd client not initialised")
+
+    q = _agd_client.subscribe()
+
+    async def generate():
+        loop = asyncio.get_event_loop()
+        try:
+            while True:
+                try:
+                    ev = await loop.run_in_executor(
+                        None, lambda: q.get(block=True, timeout=25)
+                    )
+                    yield f"data: {json.dumps(ev, default=str)}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _agd_client.unsubscribe(q)
+
+    return StreamingResponse(
+        generate(),
+        media_type = "text/event-stream",
+        headers    = {
+            "Cache-Control"   : "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/flir")
+async def flir_sse():
+    if _flir_client is None:
+        raise HTTPException(503, "flir client not initialised")
+
+    q = _flir_client.subscribe()
+
+    async def generate():
+        loop = asyncio.get_event_loop()
+        try:
+            while True:
+                try:
+                    ev = await loop.run_in_executor(
+                        None, lambda: q.get(block=True, timeout=25)
+                    )
+                    yield f"data: {json.dumps(ev, default=str)}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _flir_client.unsubscribe(q)
 
     return StreamingResponse(
         generate(),

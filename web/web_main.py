@@ -20,6 +20,8 @@ from pci.ug405.ipc.client       import UG405Client
 from pci.rtig.ipc.client        import RTIGClient
 from pci.autodim.ipc.client     import AutodimClient
 from pci.offline.ipc.client     import OfflineClient
+from pci.agd.ipc.client         import AGDClient
+from pci.flir.ipc.client        import FLIRClient
 from pci.web.api.app            import create_app
 from pci.web.api.routes.rtig    import create_receiver_app
 
@@ -73,10 +75,13 @@ def main():
     rtig_client     = RTIGClient()
     autodim_client  = AutodimClient()
     offline_client  = OfflineClient()
+    agd_client      = AGDClient()
+    flir_client     = FLIRClient()
 
     app      = create_app(registry, ug405_client=ug405_client,
                           rtig_client=rtig_client, autodim_client=autodim_client,
-                          offline_client=offline_client)
+                          offline_client=offline_client,
+                          agd_client=agd_client, flir_client=flir_client)
     rtig_app = create_receiver_app(rtig_client)
 
     port = int(os.getenv('PCI_WEB_PORT', '8081'))

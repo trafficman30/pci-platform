@@ -232,7 +232,7 @@ Append-only. Do not overwrite entries. One entry per session.
 - No runtime test yet (requires IOBus running on dev host).
 
 **Outstanding for next session:**
-- Phase 5.4: pci.agd / pci.flir
+- None — Phase 5 complete.
 
 ---
 
@@ -300,3 +300,80 @@ xkop.o.101 = pci.ug405, pci.offline
 
 **Outstanding for next session:**
 - Phase 5.4: pci.agd / pci.flir
+
+---
+
+## 2026-06-02 — Phase 5.4 complete
+
+### Phase 5.4 — pci.agd + pci.flir  ✓ COMPLETE
+
+**Built:**
+
+**pci.agd — AGD650 radar detector adapter:**
+- `agd/__init__.py`, `agd/ipc/__init__.py` — package markers
+- `agd/iobus_client.py` — `AGDIOBus`: write + batch read wrapper around
+  `IOBusClient('pci.agd')`. Logs warning on rejected writes.
+- `agd/ipc/server.py` — `IPCServer`: push socket `/tmp/pci.agd.live.sock`
+  + command socket `/tmp/pci.agd.cmd.sock`. 1Hz snapshot push;
+  immediate push on zone_change and fault/reconnect events.
+  Commands: PING → pong.
+- `agd/ipc/client.py` — `AGDClient`: background reader, subscribe/unsubscribe
+  queues, send_command(). Same pattern as all other service clients.
+- `agd/service.py` — `AGDService`: ZeroMQ SUB subscriber, one thread per AGD
+  unit. 500ms recv timeout. Change detection — only writes IOBus on zone state
+  or class presence change (not every 150ms frame). Per-zone signals: `detected`
+  + class presence bits. Global OR bits: `any_detected`, `any_<class>`.
+  On fault (frame timeout): zeros all unit signals, pushes fault event.
+  On resume: pushes reconnect event. Signal mapping via [VIRT_MAPPING] with
+  unit-qualified key first, global fallback.
+  Entry point: `python -m pci.agd.service`.
+- `config/agd.cfg` — units, frame_timeout, [CLASSES], [VIRT_MAPPING] template.
+
+**pci.flir — FLIR camera adapter:**
+- `flir/__init__.py`, `flir/ipc/__init__.py` — package markers
+- `flir/iobus_client.py` — `FLIRIOBus`: write + batch read wrapper around
+  `IOBusClient('pci.flir')`.
+- `flir/ipc/server.py` — `IPCServer`: push socket `/tmp/pci.flir.live.sock`
+  + command socket `/tmp/pci.flir.cmd.sock`. 1Hz snapshot push;
+  immediate push on zone_event. Commands: PING → pong.
+- `flir/ipc/client.py` — `FLIRClient`: same pattern as AGDClient.
+- `flir/service.py` — `FLIRService`: WebSocket subscriber (websocket-client),
+  one thread per camera running `run_forever()`. Subscription message sent
+  on_open. Event-driven: processes `messageType=Event` messages immediately.
+  Event types: Presence/Pedestrian → occupied, DilemmaZone → dilemma,
+  class field → has_pedestrian / has_bicycle / has_vehicle. Global OR bits
+  updated after every event. On close: sleeps 5s, reconnects.
+  Entry point: `python -m pci.flir.service`.
+- `config/flir.cfg` — cameras, [VIRT_MAPPING] template.
+
+**Web integration:**
+- `web/api/routes/agd.py` — REST at `/api/agd` (ping).
+- `web/api/routes/flir.py` — REST at `/api/flir` (ping).
+- `web/api/ws/live.py` — `/sse/agd` and `/sse/flir` SSE endpoints.
+- `web/api/app.py` — `agd_client` and `flir_client` parameters added.
+- `web/web_main.py` — `AGDClient()` and `FLIRClient()` created on startup.
+
+**Dependencies added:**
+- `pyzmq` 27.1.0 — installed, added to requirements.txt
+- `websocket-client` 1.9.0 — installed, added to requirements.txt
+
+**Decisions:**
+- Signal ownership: signals declared in signals.cfg as owned by `pci.agd` /
+  `pci.flir`. No runtime registration. Deployment populates [VIRT_MAPPING]
+  with signal names matching signals.cfg.
+- AGD change detection: only writes IOBus when zone state or class presence
+  changes vs previous frame — not on every 150ms frame (same as CM5).
+- AGD class types configurable via [CLASSES] section. FLIR zone types fixed:
+  occupied, dilemma, has_pedestrian, has_bicycle, has_vehicle.
+- Both services fault-tolerant: AGD reconnects via ZMQ implicit on publisher
+  restart; FLIR reconnects via run_forever loop with 5s sleep on close.
+- Config override: PCI_AGD_CFG and PCI_FLIR_CFG env vars.
+
+**Test results:**
+- Import check passed clean: all 10 new modules + updated web modules.
+- pyzmq 27.1.0 and websocket-client 1.9.0 installed and importable.
+- No runtime test yet (requires AGD simulator / FLIR mock server running).
+
+**Outstanding:**
+- Phase 5 complete. Next: Phase 6 (log management) or Phase 7 (ARM64 field
+  deployment) as directed.
