@@ -273,11 +273,8 @@ def load_config(path):
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s %(name)s %(levelname)s %(message)s',
-        datefmt='%H:%M:%S',
-    )
+    from pci.shared.log import setup
+    setup('pci.iobus')
 
     config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'signals.cfg')
     signals = load_config(config_path)

@@ -189,6 +189,10 @@ class AGDService:
             if changed:
                 prev_state[zone] = new_state
                 changed_zones.append(zone)
+                cls_str = ', '.join(k.replace('has_', '')
+                                    for k in classes_present) or '—'
+                log.info("AGD %s zone %d → detected=%d  classes=%s",
+                         unit_id, zone, detected, cls_str)
                 self._events.append({
                     'ts':       time.strftime('%H:%M:%S'),
                     'unit':     unit_id,
@@ -265,10 +269,8 @@ class AGDService:
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s %(name)s %(levelname)s %(message)s',
-    )
+    from pci.shared.log import setup
+    setup('pci.agd')
 
     cfg_path = os.environ.get('PCI_AGD_CFG', _CFG_DEFAULT)
     if not os.path.exists(cfg_path):

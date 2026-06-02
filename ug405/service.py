@@ -630,11 +630,8 @@ def main():
     )
     cfg_path = os.path.abspath(cfg_path)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(name)s] %(levelname)s  %(message)s',
-        datefmt='%H:%M:%S',
-    )
+    from pci.shared.log import setup
+    setup('pci.ug405')
 
     log.info("pci.ug405 starting — config: %s", cfg_path)
 

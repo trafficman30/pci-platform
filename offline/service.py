@@ -90,7 +90,7 @@ class UG405OpModeTracker:
                 if 'opmode' in ev:
                     with self._lock:
                         self._op_mode = ev['opmode']
-                    log.debug("opMode = %d", ev['opmode'])
+                    log.info("opMode = %d", ev['opmode'])
             except Exception:
                 pass
         with self._lock:
@@ -452,11 +452,8 @@ class OfflinePlanService:
 def main():
     import configparser
 
-    logging.basicConfig(
-        level   = logging.INFO,
-        format  = '%(asctime)s pci.offline %(name)s %(levelname)s %(message)s',
-        datefmt = '%H:%M:%S',
-    )
+    from pci.shared.log import setup
+    setup('pci.offline')
     log.info("starting  pid=%d", os.getpid())
 
     cfg_path = os.getenv('PCI_OFFLINE_CFG', _DEFAULT_CFG)

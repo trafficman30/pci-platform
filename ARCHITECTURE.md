@@ -115,7 +115,8 @@ All services follow `pci.<domain>` pattern.
 │   ├── driver_gpio.py          ← GPIO → CM5 pins
 │   ├── driver_agd.py           ← AGD TCP client → AGD server
 │   ├── driver_flir.py          ← FLIR TCP client → FLIR server
-│   └── driver_sim.py           ← Simulation driver (replaces hardware)
+│   ├── driver_sim.py           ← Simulation driver (replaces hardware)
+│   └── driver_recorder.py     ← Records IOBus signal writes to JSONL
 │
 ├── mova/
 │   ├── kernel_main.py          ← entry: pci.mova.kernel N
@@ -214,9 +215,9 @@ All services follow `pci.<domain>` pattern.
     ├── pci.ug405.log
     ├── pci.web.log
     └── mova/
-        ├── pci.mova.0_2026-06-01.jsonl       ← today, live, uncompressed
-        ├── pci.mova.0_2026-05-31.jsonl.gz    ← previous days, compressed
-        └── pci.mova.1_2026-06-01.jsonl
+        ├── stream_0_2026-06-01.jsonl          ← today, live, uncompressed
+        ├── stream_0_2026-05-31.jsonl.gz       ← previous days, compressed
+        └── stream_1_2026-06-01.jsonl
 ```
 
 ---
@@ -446,6 +447,7 @@ hardware behaviour exactly. It is not a platform limitation — it is the algori
 ## Log storage and rotation
 
 ```
+Filename pattern:  stream_N_YYYY-MM-DD.jsonl    (produced by StreamLogger)
 Live (today):      .jsonl      uncompressed, appended every tick
 Previous days:     .jsonl.gz   gzip compressed at 00:05 via systemd timer
 
@@ -458,7 +460,7 @@ Retention: 30 days default, configurable
 ```
 
 The kernel process never performs compression or rotation.
-A separate systemd oneshot timer handles this entirely.
+`/opt/pci/tools/rotate_logs.sh` runs via `pci-rotate-logs.timer` at 00:05 daily.
 Web process decompresses on demand for history/playback — kernel unaffected.
 
 ---
@@ -930,12 +932,23 @@ is_dim = (now >= dim_utc) OR (now < bright_utc)
 **Dependency:** `astral` — added to requirements.txt.
 **TODO before writing:** confirm `astral` installs cleanly in the venv.
 
-### Phase 6 — Log management  ← next
+### Phase 6 — Log management  ✓ COMPLETE
 
 ```
-6.1  Systemd timer for gzip rotation at 00:05
-6.2  30-day retention policy
-6.3  driver_sim.py JSONL replay mode — replay real junction recordings
+6.0  shared/log.py — unified logging setup, CM5 format, all services
+     Three handlers: console, per-service rotating file, unified pci.log
+6.1  tools/rotate_logs.sh + pci-rotate-logs.timer/service
+     Gzip previous day's MOVA JSONL at 00:05 daily
+6.2  30-day retention policy — delete stream_*.jsonl.gz older than 30 days
+6.3  driver_sim.py replay mode — read JSONL recording, replay through signal table
+     Format: {"ts":float, "n":"signal_name", "v":0|1}  Activate via [replay] in signals.cfg
+6.4  driver_recorder.py — records IOBus signal writes to JSONL
+     Activated by driver = recorder in platform.cfg [iobus]
+     Config in signals.cfg [recorder] section: file=, signals= (optional filter)
+     driver_recorder.py covers all replay use cases — TLC input replay, MOVA detector
+     replay, and UTC session replay.  Recording IOBus signal writes from pci.ug405
+     captures the same information as an SNMP SET recorder would, without needing
+     a separate tool.  No separate UG405 SNMP recorder needed.
 ```
 
 ### Phase 7 — UI design system

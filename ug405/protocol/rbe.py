@@ -139,7 +139,7 @@ class RBEService:
                                              timeout=delay_ms / 1000.0,
                                              expected_request_id=req_id)
                 if sent:
-                    log.debug("SCOOT INFORM acknowledged (attempt %d)", attempt + 1)
+                    log.info("SCOOT INFORM acknowledged (attempt %d)", attempt + 1)
                     return
             except Exception as e:
                 log.warning("SCOOT INFORM error attempt %d: %s", attempt + 1, e)
@@ -274,9 +274,9 @@ class RBEService:
                                              timeout=delay_ms / 1000.0,
                                              expected_request_id=req_id)
                 if sent:
-                    log.debug("RBE INFORM acknowledged (attempt %d)", attempt + 1)
+                    log.info("RBE INFORM acknowledged (attempt %d)", attempt + 1)
                     break
-                log.debug("RBE INFORM no ACK (attempt %d/%d)", attempt + 1, retries + 1)
+                log.warning("RBE INFORM no ACK (attempt %d/%d)", attempt + 1, retries + 1)
             except Exception as e:
                 log.warning("RBE INFORM error attempt %d: %s", attempt + 1, e)
 

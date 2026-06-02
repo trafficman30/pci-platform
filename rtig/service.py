@@ -130,7 +130,7 @@ class PulseEngine:
             if existing:
                 existing.cancel()
             self._iobus.write(signal, 1)
-            log.debug("PULSE ON  → %s  (%.1fs)", signal, self.duration)
+            log.info("PULSE ON  → %s  (%.1fs)", signal, self.duration)
             t = threading.Timer(self.duration, self._expire, args=(signal,))
             t.daemon = True
             t.start()
@@ -140,7 +140,7 @@ class PulseEngine:
         with self._lock:
             self._timers.pop(signal, None)
         self._iobus.write(signal, 0)
-        log.debug("PULSE OFF ← %s", signal)
+        log.info("PULSE OFF ← %s", signal)
 
     def active(self):
         with self._lock:
@@ -168,11 +168,14 @@ class RTIGService:
         if msg is None:
             return []
 
-        log.debug("TLP  sig=%-5s mov=%-3s trg=%-3s pri=%-4s dev=%s",
+        log.info("TLP  sig=%-5s mov=%-3s trg=%-3s pri=%-4s dev=%s",
                   msg['traffic_signal'], msg['movement'], msg['trigger_point'],
                   msg['priority'], msg['schedule_deviation'])
 
         matched = match_rules(self.rules, msg)
+        if matched:
+            log.info("TLP matched %d rule(s) → %s",
+                     len(matched), [r.get('signal') for r in matched])
         pulsed  = []
 
         for rule in matched:
@@ -222,11 +225,8 @@ class RTIGService:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
-    logging.basicConfig(
-        level   = logging.INFO,
-        format  = '%(asctime)s pci.rtig %(name)s %(levelname)s %(message)s',
-        datefmt = '%H:%M:%S',
-    )
+    from pci.shared.log import setup
+    setup('pci.rtig')
     log.info("starting  pid=%d", os.getpid())
 
     cfg_path = os.getenv('PCI_RTIG_CFG', _DEFAULT_CFG)

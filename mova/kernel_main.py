@@ -66,11 +66,8 @@ def main():
 
     stream_id = int(sys.argv[1])
 
-    logging.basicConfig(
-        level   = logging.INFO,
-        format  = f'%(asctime)s pci.mova.kernel@{stream_id} %(name)s %(levelname)s %(message)s',
-        datefmt = '%H:%M:%S',
-    )
+    from pci.shared.log import setup
+    setup(f'pci.mova.{stream_id}')
     log = logging.getLogger('pci.mova.kernel')
     log.info("starting stream %d  pid=%d", stream_id, os.getpid())
 

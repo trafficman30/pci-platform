@@ -128,6 +128,8 @@ class FLIRService:
             sig = self._sig(camera, zone, 'occupied')
             if sig:
                 self._io.write(sig, value)
+                log.info("FLIR %s zone %d [%s] -> %s = %d",
+                         camera, zone, event_type, sig, value)
 
         if event_type == "DilemmaZone":
             sig = self._sig(camera, zone, 'dilemma')
@@ -210,10 +212,8 @@ class FLIRService:
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s %(name)s %(levelname)s %(message)s',
-    )
+    from pci.shared.log import setup
+    setup('pci.flir')
 
     cfg_path = os.environ.get('PCI_FLIR_CFG', _CFG_DEFAULT)
     if not os.path.exists(cfg_path):

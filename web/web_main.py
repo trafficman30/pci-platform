@@ -59,11 +59,8 @@ async def _serve(app, port, rtig_app, rtig_port):
 
 
 def main():
-    logging.basicConfig(
-        level   = logging.INFO,
-        format  = '%(asctime)s pci.web %(name)s %(levelname)s %(message)s',
-        datefmt = '%H:%M:%S',
-    )
+    from pci.shared.log import setup
+    setup('pci.web')
     log = logging.getLogger('pci.web')
     log.info("starting  pid=%d", os.getpid())
 

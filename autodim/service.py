@@ -159,11 +159,8 @@ class AutodimService:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
-    logging.basicConfig(
-        level   = logging.INFO,
-        format  = '%(asctime)s pci.autodim %(name)s %(levelname)s %(message)s',
-        datefmt = '%H:%M:%S',
-    )
+    from pci.shared.log import setup
+    setup('pci.autodim')
     log.info("starting  pid=%d", os.getpid())
 
     cfg_path = os.getenv('PCI_AUTODIM_CFG', _DEFAULT_CFG)
