@@ -603,7 +603,7 @@ Do not infer signal names from memory.
 
 ```
 3.1  driver_xkop.py — TCP client to TLC XKOP server    ✓ COMPLETE
-3.2  driver_rpdb.py — TCP client to TLC RPDB server
+3.2  driver_rpdb.py — TCP client to TLC RPDB server     ✓ COMPLETE
 3.3  driver_gpio.py — CM5 GPIO pins
 ```
 
@@ -625,6 +625,39 @@ but does nothing. Signal names are deployment-specific; they are not defined her
   registered_signals())
 - CRC16 inlined in driver_xkop.py (no shared crc_utils in pci/iobus/)
 - table.subscribe() confirmed present in server.py — used for event-driven send
+
+#### Phase 3.2 implementation notes
+
+**Activation:** set `driver = rpdb` in `config/platform.cfg` `[iobus]` section.
+Connection params in `config/rpdb.cfg` `[RPDB]` section.
+
+**Signal registration:** `rpdb.i.*` input signals are registered by the driver
+at runtime after querying element counts from the controller — NOT pre-registered
+in signals.cfg. Element count is only known once the controller responds.
+`rpdb.o.*` output signals must be declared in signals.cfg; the driver discovers
+them by scanning signals.cfg (SignalTable has no registered_signals()).
+
+**Re-registration on reconnect:** If the controller is down at startup,
+`_input_signals` will be empty. `_connect_loop()` re-runs `_fetch_names()`,
+`_register_inputs()`, `_register_outputs()` on every pass until the controller
+responds. Once populated, this block is skipped. This ensures the driver
+recovers fully when a controller comes back up after a cold-start dropout.
+
+**Reconnect fetch:** `_initial_fetch()` called on every (re)connect — pulls
+current controller state immediately rather than waiting up to 60s for the
+first subscription heartbeat. No zeroing of inputs (unlike XKOP).
+
+**Two-socket model:** separate read socket (subscriptions) and write socket
+(SET_VALUE). Write socket uses write_password. SET_VALUE requests are pipelined
+— all changes for one URI sent back-to-back before reading ACKs, preventing
+TLC UTC mode drops when multiple XIN bits change together.
+
+**PCI adaptations from CM5:**
+- `source='pci.iobus'` throughout
+- `table.register()` called directly by driver for dynamically discovered inputs
+- `io.registered_signals()` → scan signals.cfg for rpdb.o.* signals
+- Config from `config/rpdb.cfg` (separate file — subscriptions/names/outputs
+  sections are too complex for platform.cfg)
 
 #### XKOP driver reference — derived from /opt/CM5/io/io_xkop.py
 
