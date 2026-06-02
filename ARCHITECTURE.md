@@ -602,10 +602,29 @@ Do not infer signal names from memory.
 ### Phase 3 — Real hardware drivers
 
 ```
-3.1  driver_xkop.py — TCP client to TLC XKOP server
+3.1  driver_xkop.py — TCP client to TLC XKOP server    ✓ COMPLETE
 3.2  driver_rpdb.py — TCP client to TLC RPDB server
 3.3  driver_gpio.py — CM5 GPIO pins
 ```
+
+#### Phase 3.1 implementation notes
+
+**Activation:** set `driver = xkop` in `config/platform.cfg` `[iobus]` section.
+Connection params (ip, port, mode) are in the `[xkop]` section of `platform.cfg`.
+
+**Signal config:** `xkop.i.*` and `xkop.o.*` entries must be added to
+`config/signals.cfg` per deployment. The driver scans signals.cfg at startup
+to discover which signals to monitor and zero. No signals → driver connects
+but does nothing. Signal names are deployment-specific; they are not defined here.
+
+**PCI adaptations from CM5:**
+- `source='pci.iobus'` (all IOBus drivers own signals as pci.iobus)
+- `_zero_inputs()` writes 0 explicitly to each xkop.i.* on reconnect
+  (SignalTable has no zero_owned_by())
+- Signal names discovered by scanning signals.cfg (SignalTable has no
+  registered_signals())
+- CRC16 inlined in driver_xkop.py (no shared crc_utils in pci/iobus/)
+- table.subscribe() confirmed present in server.py — used for event-driven send
 
 #### XKOP driver reference — derived from /opt/CM5/io/io_xkop.py
 
