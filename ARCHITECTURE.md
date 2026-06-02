@@ -599,7 +599,7 @@ _running and transitions status to WARMUP, matching normal start() behaviour.
 /opt/pci/mova/SIGNALS.md — confirmed complete output signal list.
 Do not infer signal names from memory.
 
-### Phase 3 — Real hardware drivers
+### Phase 3 — Real hardware drivers  ✓ COMPLETE
 
 ```
 3.1  driver_xkop.py — TCP client to TLC XKOP server    ✓ COMPLETE
