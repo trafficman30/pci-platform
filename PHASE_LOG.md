@@ -107,3 +107,34 @@ Append-only. Do not overwrite entries. One entry per session.
 - Phase 4.3: `web/api/routes/ug405.py` — wire UG405 IPC into web aggregator
 - Phase 5: pci.rtig, pci.autodim, pci.offline, pci.agd/flir
   (read /opt/CM5 equivalent before writing each service)
+
+---
+
+## 2026-06-02 — Phase 4.3 complete
+
+### Phase 4.3 — Web aggregates UG405 alongside MOVA  ✓ COMPLETE
+
+**Built:**
+- `ug405/ipc/client.py` — `UG405Client`: background thread connects to
+  `/tmp/pci.ug405.live.sock`, distributes JSON lines to subscriber queues.
+  `send_command()` uses `/tmp/pci.ug405.cmd.sock`. Singleton — no registry needed.
+- `web/api/routes/ug405.py` — REST router mounted at `/api/ug405`.
+  `GET /ping` — sends PING to UG405 command socket, returns ack.
+- `web/api/ws/live.py` — added `GET /sse/ug405` SSE endpoint.
+  Identical subscribe/generate/unsubscribe pattern to `/sse/mova/{stream_id}`.
+- `web/api/app.py` — `create_app(registry, ug405_client=None)`.
+  Wires UG405 client into routes and SSE on startup.
+- `web/web_main.py` — creates `UG405Client()` and passes to `create_app()`.
+
+**Decisions:**
+- `UG405Client` is a plain class with fixed socket paths — no registry wrapper
+  needed since there is only one UG405 instance.
+- `ug405_client` is optional in `create_app()` so existing tests and
+  MOVA-only startup are not broken.
+
+**Test results:**
+- Import check passed clean.
+- No runtime test yet (requires pci.ug405 service running on the dev host).
+
+**Outstanding for next session:**
+- Phase 5.1: pci.rtig — read /opt/CM5/rtig/ first
