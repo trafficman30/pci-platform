@@ -137,7 +137,7 @@ All services follow `pci.<domain>` pattern.
 │
 ├── ug405/
 │   ├── service.py              ← entry: pci.ug405
-│   │                              TCP client → UTC station server
+│   │                              SNMP agent UDP 161 — instation polls us
 │   │                              unix socket client → IOBus
 │   ├── iobus_client.py         ← IOBus read/write (raw signals, no latch)
 │   ├── ipc/
@@ -219,7 +219,7 @@ This is fixed by protocol and hardware — not our choice.
 | TLC RPDB server       | `driver_rpdb.py`       | TCP client → TLC       |
 | AGD server            | `driver_agd.py`        | TCP client → AGD       |
 | FLIR server           | `driver_flir.py`       | TCP client → FLIR      |
-| UTC station server    | `pci.ug405`            | TCP client → UTC       |
+| UTC instation         | `pci.ug405`            | SNMP agent UDP 161     |
 
 ### We are the server — hardware/external connects to us
 
@@ -494,7 +494,7 @@ mova@0   mova@1    pci.ug405  pci.rtig  pci.autodim
 ```
 External protocol           Service                    IOBus
 ─────────────────           ───────                    ──────
-UTC station (server)   ←→   pci.ug405            ←→   signal table
+UTC instation (polls)  ←→   pci.ug405            ←→   signal table
 TLC XKOP (server)      ←    driver_xkop@N         →   signal table
 TLC RPDB (server)      ←    driver_rpdb            →   signal table
 AGD (server)           ←    driver_agd             →   signal table
@@ -762,13 +762,30 @@ owned input signals) on every reconnect.
 | Runs inside CM5 monolith process           | Runs inside `pci.iobus` process             |
 | Signal names: `xkop.i.N` / `xkop.o.N`     | Same naming convention — carry it over      |
 
-### Phase 4 — UG405
+### Phase 4 — UG405  ⬤ IN PROGRESS
 
 ```
-4.1  pci.ug405 — TCP client to UTC station, reads/writes IOBus
+4.1  pci.ug405 — SNMP agent UDP 161, instation polls us, reads/writes IOBus
 4.2  IPC live socket to web
 4.3  Web aggregates UG405 alongside MOVA
 ```
+
+#### Phase 4 prerequisites — completed
+
+**pysnmp pinned to 4.4.12** — matches CM5 reference implementation exactly.
+CM5 uses asyncore-based pysnmp v4 API. pyasn1 pinned to 0.4.8 (v4.4.12
+incompatible with newer pyasn1). Both pinned in requirements.txt.
+
+**pysnmp v7 migration deferred to Phase 7** (ARM64 field validation).
+v7 breaks: `pysnmp.carrier.asyncore` removed (asyncore gone in Python 3.12),
+entire API renamed camelCase → snake_case, `runDispatcher()` replaced by
+asyncio event loop. Field target is Python 3.11 (asyncore still present) —
+safe to defer. Revisit at Phase 7 when CM5 ARM64 Debian Python version confirmed.
+
+**SNMP agent model confirmed** — pci.ug405 is the SNMP agent (UTC Type 2
+outstation). Instation (UTC central) polls us via SNMP GET/SET on UDP 161.
+For RBE, we push INFORM packets to InstationAddress:InstationPort (UDP, optional).
+No outbound TCP connection. ARCHITECTURE.md client/server table corrected.
 
 ### Phase 5 — Remaining services
 

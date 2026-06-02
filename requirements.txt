@@ -3,3 +3,11 @@
 # Phase 2 (MOVA kernel split + web):
 fastapi
 uvicorn[standard]
+# Phase 4 (UG405 SNMP agent):
+# Pinned to v4.4.12 to match CM5 reference implementation (asyncore-based API).
+# pyasn1 pinned to 0.4.8 — v4.4.12 is incompatible with newer pyasn1.
+# v7 migration deferred to Phase 7 (ARM64 validation) when field Python
+# version is confirmed. v7 breaks: asyncore removed, full API renamed to
+# snake_case, blocking runDispatcher() replaced by asyncio event loop.
+pysnmp==4.4.12
+pyasn1==0.4.8
