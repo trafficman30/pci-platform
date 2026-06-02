@@ -945,6 +945,9 @@ Before stopping, Claude Code must:
 3. Note outstanding issues for next session
 4. git commit all changes
 5. git push to remote
+6. Append a summary to /opt/pci/PHASE_LOG.md covering: what was built,
+   decisions made, test results with actual numbers, any issues found.
+   Do not overwrite — always append.
 
 ## Python environment
 
