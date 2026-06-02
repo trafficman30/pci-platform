@@ -602,17 +602,89 @@ Do not infer signal names from memory.
 ### Phase 3 — Real hardware drivers
 
 ```
-Start by reading the existing XKOP driver in /opt/CM5 before writing
-anything. The CM5 XKOP implementation is tested and proven — understand
-it fully before building driver_xkop.py.
-
-Key file: /opt/CM5/core/io_bus_server.py (IOBus server + XKOP integration)
-Also read any xkop/ or driver files under /opt/CM5/.
-
 3.1  driver_xkop.py — TCP client to TLC XKOP server
 3.2  driver_rpdb.py — TCP client to TLC RPDB server
 3.3  driver_gpio.py — CM5 GPIO pins
 ```
+
+#### XKOP driver reference — derived from /opt/CM5/io/io_xkop.py
+
+Read /opt/CM5/io/io_xkop.py and /opt/CM5/core/io_bus.py in full
+before writing driver_xkop.py. Do not infer behaviour from this
+summary alone — the source is authoritative.
+
+**What the driver does**
+
+Bidirectional bridge between the IOBus signal table and a TLC via
+the XKOP TCP protocol.
+
+- Receives signal values from TLC → writes as `xkop.i.N` inputs to IOBus
+- Watches IOBus for `xkop.o.N` changes → sends to TLC
+- Keepalive packet every 6 seconds
+- Dead-connection detection: nothing received for 3× keepalive (18s)
+  → treat as dead, reconnect
+- On reconnect: zero all owned `xkop.i.*` signals so stale values do
+  not persist, then force a full resend of all current `xkop.o.*` values
+
+**Connection mode**
+
+TCP, configured per deployment:
+- Client mode (normal field use): connect out to TLC IP:port
+  Exponential backoff on failure: 2s initial, doubles to 300s max
+- Server mode: bind and listen; TLC connects in
+
+Socket set non-blocking after connect. Send and receive run on
+separate threads.
+
+**17-byte packet format**
+
+```
+Byte  0-1 : header  0xCA 0x35
+Byte  2   : type    0x00 = data    0x02 = keepalive
+Bytes 3-14: four signal slots × 3 bytes each
+            [xkop_index, value_high, value_low]
+            Unused slots: xkop_index = 0xFF
+Bytes 15-16: CRC16 over bytes 2-14 (skip_bytes=2, length=15)
+             implemented in /opt/CM5/core/crc_utils.py write_crc16()
+```
+
+Value is 16-bit: `(high_byte << 8) | low_byte`.
+Up to 4 signal updates per packet. Larger batches are split into
+multiple packets in groups of 4.
+
+XKOP physical index is extracted from the signal name:
+`xkop.o.101` → index 101.
+
+**Event-driven send loop**
+
+The CM5 driver wakes immediately on IOBus change via a bus
+subscription callback → `threading.Event.set()` → send loop wakes.
+
+In PCI, drivers run inside `pci.iobus` and the IOBus signal table
+notifies subscribers synchronously on every write. Use the same
+pattern: subscribe to the signal table, wake a send event when any
+`xkop.o.*` signal changes. Do not poll — match the CM5 pattern.
+
+**Signal registration**
+
+`xkop.i.*` signals are owned by the XKOP driver (it writes them).
+`xkop.o.*` signals are owned by their respective services (MOVA,
+UG405 etc.) — the driver only reads them.
+
+Ownership is declared in `signals.cfg` exactly as for any other
+signal. The driver must call `zero_owned_by` (write 0 to all its
+owned input signals) on every reconnect.
+
+**CM5 vs PCI mapping**
+
+| CM5                                        | PCI equivalent                              |
+|--------------------------------------------|---------------------------------------------|
+| `io.subscribe(cb)` — push on any change    | `table.subscribe(cb)` in server.py          |
+| `io.write(name, val, source='xkop_driver')`| `table.write(name, val, source)`            |
+| `io.read(name)`                            | `table.read(name)`                          |
+| `io.zero_owned_by('xkop_driver')`          | write 0 to each owned signal on reconnect   |
+| Runs inside CM5 monolith process           | Runs inside `pci.iobus` process             |
+| Signal names: `xkop.i.N` / `xkop.o.N`     | Same naming convention — carry it over      |
 
 ### Phase 4 — UG405
 
