@@ -15,6 +15,7 @@ log = logging.getLogger('pci.web.sse')
 router         = APIRouter()
 _registry      = None
 _ug405_client  = None
+_rtig_client   = None
 
 
 def set_registry(r):
@@ -25,6 +26,11 @@ def set_registry(r):
 def set_ug405_client(c):
     global _ug405_client
     _ug405_client = c
+
+
+def set_rtig_client(c):
+    global _rtig_client
+    _rtig_client = c
 
 
 @router.get("/mova/{stream_id}")
@@ -53,6 +59,39 @@ async def mova_sse(stream_id: int):
             pass
         finally:
             client.unsubscribe(q)
+
+    return StreamingResponse(
+        generate(),
+        media_type = "text/event-stream",
+        headers    = {
+            "Cache-Control"   : "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/rtig")
+async def rtig_sse():
+    if _rtig_client is None:
+        raise HTTPException(503, "rtig client not initialised")
+
+    q = _rtig_client.subscribe()
+
+    async def generate():
+        loop = asyncio.get_event_loop()
+        try:
+            while True:
+                try:
+                    ev = await loop.run_in_executor(
+                        None, lambda: q.get(block=True, timeout=25)
+                    )
+                    yield f"data: {json.dumps(ev, default=str)}\n\n"
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _rtig_client.unsubscribe(q)
 
     return StreamingResponse(
         generate(),
