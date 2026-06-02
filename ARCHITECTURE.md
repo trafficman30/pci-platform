@@ -555,6 +555,12 @@ MOVA Tools (client)    →    pci.mova.kernel@N     ←→   signal table
 - `libmova.so` compiled natively on ARM64 Debian LXC
 - Systemd units manage all services
 
+### Web service port
+
+- Dev host: 8081 (8080 occupied by CM5 monolith)
+- Field CM5: 8080 (no CM5 monolith present)
+- Override: PCI_WEB_PORT environment variable
+
 ### ARM64 build environment
 
 - Debian ARM64 LXC on SER5 (QEMU) mirrors CM5 exactly
@@ -835,6 +841,11 @@ wiring is the remaining piece.
 
 ### Phase 5 — Remaining services
 
+Before writing any Phase 5 service:
+Read the equivalent service in /opt/CM5 first.
+Summarise what it does and what PCI adaptations
+are needed. Wait for confirmation before writing.
+
 ```
 5.1  pci.rtig  — TCP server, validates messages, W writes to IOBus
 5.2  pci.autodim
@@ -911,6 +922,30 @@ design.html must exist before any template work starts.
 Claude Code must read design.html before writing
 any HTML or CSS. No styles invented outside this file.
 
+Before building any MOVA UI page, read the equivalent 
+popup from /opt/MOVA/pci_mova/static/ and port it 
+directly. Do not rebuild from scratch.
+
+Pages to port:
+- Dataset popup    → /opt/MOVA/pci_mova/static/dataset.html
+- Derived popup    → /opt/MOVA/pci_mova/static/derived.html  
+- Analysis popup   → /opt/MOVA/pci_mova/static/analysis.html
+- Messages popup   → /opt/MOVA/pci_mova/static/messages.html
+- Errors popup     → /opt/MOVA/pci_mova/static/errors.html
+- History popup    → /opt/MOVA/pci_mova/static/history.html
+
+Read the file, understand it, adapt to new CSS/JS 
+structure. Never rewrite from memory.
+
+## End of every Claude Code session
+
+Before stopping, Claude Code must:
+1. Mark completed phases in build order
+2. Record any decisions not already in this document
+3. Note outstanding issues for next session
+4. git commit all changes
+5. git push to remote
+
 ## Python environment
 
 Shared venv at /opt/pci/venv — all services use this.
@@ -928,3 +963,4 @@ Systemd units use:
 requirements.txt lives at /opt/pci/requirements.txt
 Add packages there as new services require them.
 All services share the same requirements.txt.
+
