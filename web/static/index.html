@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PCI MOVA — Phase 2 proof</title>
+<style>
+  body  { font-family: monospace; background: #1a1a1a; color: #ccc; padding: 16px; margin: 0; }
+  h1    { color: #fff; font-size: 1.1em; margin: 0 0 12px; }
+  h2    { color: #aaa; font-size: 0.9em; margin: 16px 0 6px; text-transform: uppercase; letter-spacing: 1px; }
+  #status { color: #0f0; font-size: 0.85em; margin-bottom: 8px; }
+  #snap { background: #111; color: #0cf; padding: 10px; overflow: auto;
+          max-height: 420px; font-size: 0.78em; white-space: pre; border: 1px solid #333; }
+  #events { background: #111; color: #fa0; padding: 10px; height: 160px;
+            overflow-y: scroll; font-size: 0.78em; border: 1px solid #333; }
+  #events p { margin: 0; padding: 2px 0; border-bottom: 1px solid #222; }
+</style>
+</head>
+<body>
+<h1>PCI MOVA — Stream 0  (Phase 2 live proof)</h1>
+<div id="status">connecting…</div>
+
+<h2>Latest snapshot</h2>
+<pre id="snap"></pre>
+
+<h2>Events (phase_change / fault / msg / stage_forced)</h2>
+<div id="events"></div>
+
+<script>
+const STREAM = 0;
+const snap   = document.getElementById('snap');
+const events = document.getElementById('events');
+const status = document.getElementById('status');
+
+const es = new EventSource('/sse/mova/' + STREAM);
+
+es.onopen = function() {
+    status.textContent = 'connected  stream ' + STREAM;
+    status.style.color = '#0f0';
+};
+
+es.onmessage = function(e) {
+    let data;
+    try { data = JSON.parse(e.data); } catch(_) { return; }
+
+    if (data.t === 'snap') {
+        snap.textContent = JSON.stringify(data, null, 2);
+    } else {
+        const p = document.createElement('p');
+        p.textContent = new Date().toISOString().slice(11, 23) + '  ' + JSON.stringify(data);
+        events.appendChild(p);
+        // keep last 200 events
+        while (events.children.length > 200) events.removeChild(events.firstChild);
+        events.scrollTop = events.scrollHeight;
+    }
+};
+
+es.onerror = function() {
+    status.textContent = 'connection lost — retrying…';
+    status.style.color = '#f44';
+};
+</script>
+</body>
+</html>

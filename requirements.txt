@@ -1,0 +1,5 @@
+# /opt/pci/venv/bin/pip install -r requirements.txt
+# Phase 1 (IOBus + signal table): stdlib only
+# Phase 2 (MOVA kernel split + web):
+fastapi
+uvicorn[standard]

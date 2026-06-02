@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+*.sock
+*.log
+*.jsonl
+*.jsonl.gz
+/tmp/

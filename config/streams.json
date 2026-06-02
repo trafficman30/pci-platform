@@ -1,0 +1,15 @@
+{
+  "0": {
+    "detectors": ["det.0", "det.1", "det.2", "det.3"],
+    "confirms":  ["conf.0", "conf.1"],
+    "crb":       "crb",
+    "forces":    ["force.0", "force.1", "force.2", "force.3"],
+    "to":        "to",
+    "hi":        "hi",
+    "sync":      "sync",
+    "det_fault": "det_fault",
+    "mova_fault":"mova_fault",
+    "specials":  ["special.0", "special.1", "special.2", "special.3",
+                  "special.4", "special.5", "special.6", "special.7"]
+  }
+}
