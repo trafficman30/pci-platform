@@ -183,3 +183,54 @@ Append-only. Do not overwrite entries. One entry per session.
 **Test results:**
 - Import check passed clean.
 - No runtime test yet (requires pci.rtig service + IOBus running on dev host).
+
+---
+
+## 2026-06-02 — Phase 5.2 complete
+
+### Phase 5.2 — pci.autodim  ✓ COMPLETE
+
+**Built:**
+- `autodim/__init__.py`, `autodim/ipc/__init__.py` — package markers
+- `autodim/iobus_client.py` — `AutodimIOBus`: write-only wrapper around
+  `IOBusClient('pci.autodim')`. Logs warning on write failure.
+- `autodim/ipc/server.py` — `IPCServer`: push socket `/tmp/pci.autodim.live.sock`
+  + command socket `/tmp/pci.autodim.cmd.sock`. Same pattern as rtig/ug405.
+  Commands: PING → pong, SET_ENABLED 1/0 → ack.
+  1Hz snapshot push; immediate push on dim/bright transition event.
+- `autodim/ipc/client.py` — `AutodimClient`: singleton background reader,
+  subscribe/unsubscribe queues, send_command(). Same pattern as RTIGClient.
+- `autodim/service.py` — `AutodimService`: astral-based dim/bright controller.
+  30-second tick loop. Recalculates sunrise/sunset on date change.
+  Algorithm: `is_dim = (now >= dim_utc) OR (now < bright_utc)`.
+  Persists current state to `/tmp/pci.autodim.state.json` on each transition.
+  Restores state on startup. Writes dim value to IOBus on every tick.
+  Entry point: `python -m pci.autodim.service`.
+- `config/autodim.cfg` — lat, lon, dim_offset_minutes, bright_offset_minutes,
+  signal, enabled. Config override via PCI_AUTODIM_CFG env var.
+- `web/api/routes/autodim.py` — REST router at `/api/autodim`:
+  `GET /ping`, `POST /set_enabled/{value}`.
+- `web/api/ws/live.py` — `GET /sse/autodim` SSE endpoint added.
+- `web/api/app.py` — `create_app(registry, ug405_client, rtig_client, autodim_client)`.
+- `web/web_main.py` — creates `AutodimClient()` and passes to `create_app()`.
+
+**Decisions:**
+- Algorithm is purely time-based (astral). No photocell read — the architecture
+  diagram note "reads photocell" is aspirational; the CM5 summary confirmed
+  astral-only algorithm.
+- `is_dim` starts as None (unknown) on first tick — triggers a transition to
+  the correct state and writes immediately on first 30s tick.
+- Dim value persisted to /tmp on every transition so restarts recover state.
+- `virt.dim` used as default signal in config — must be declared in signals.cfg
+  as owned by `pci.autodim` for each deployment.
+- astral 3.2 installed; `astral` added to requirements.txt in previous session.
+
+**Test results:**
+- Import check passed clean: all 8 new/modified modules imported without error.
+- astral sunrise/sunset calculation confirmed: London 2026-06-02 sunrise 03:48 UTC,
+  sunset 20:09 UTC — correct for date and location.
+- No runtime test yet (requires IOBus running on dev host).
+
+**Outstanding for next session:**
+- Phase 5.3: pci.offline
+- Phase 5.4: pci.agd / pci.flir

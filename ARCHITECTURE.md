@@ -848,7 +848,7 @@ are needed. Wait for confirmation before writing.
 
 ```
 5.1  pci.rtig  — HTTP receiver on :9010 inside pci.web, W writes to IOBus  ✓ COMPLETE
-5.2  pci.autodim
+5.2  pci.autodim                                                             ✓ COMPLETE
 5.3  pci.offline
 5.4  pci.agd / pci.flir
 ```

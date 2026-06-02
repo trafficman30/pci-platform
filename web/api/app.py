@@ -9,19 +9,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from pci.web.api.routes.mova  import router as mova_router,  set_registry as mova_set_reg
-from pci.web.api.routes.ug405 import router as ug405_router, set_client   as ug405_set_client
-from pci.web.api.routes.rtig  import router as rtig_router,  set_client   as rtig_set_client, create_receiver_app
-from pci.web.api.ws.live      import (router as sse_router,  set_registry as sse_set_reg,
-                                      set_ug405_client as sse_set_ug405,
-                                      set_rtig_client  as sse_set_rtig)
+from pci.web.api.routes.mova    import router as mova_router,    set_registry as mova_set_reg
+from pci.web.api.routes.ug405   import router as ug405_router,   set_client   as ug405_set_client
+from pci.web.api.routes.rtig    import router as rtig_router,    set_client   as rtig_set_client, create_receiver_app
+from pci.web.api.routes.autodim import router as autodim_router, set_client   as autodim_set_client
+from pci.web.api.ws.live        import (router as sse_router,    set_registry as sse_set_reg,
+                                        set_ug405_client   as sse_set_ug405,
+                                        set_rtig_client    as sse_set_rtig,
+                                        set_autodim_client as sse_set_autodim)
 
 log = logging.getLogger('pci.web')
 
 _STATIC = os.path.join(os.path.dirname(__file__), '..', 'static')
 
 
-def create_app(registry, ug405_client=None, rtig_client=None):
+def create_app(registry, ug405_client=None, rtig_client=None, autodim_client=None):
     mova_set_reg(registry)
     sse_set_reg(registry)
     if ug405_client is not None:
@@ -30,6 +32,9 @@ def create_app(registry, ug405_client=None, rtig_client=None):
     if rtig_client is not None:
         rtig_set_client(rtig_client)
         sse_set_rtig(rtig_client)
+    if autodim_client is not None:
+        autodim_set_client(autodim_client)
+        sse_set_autodim(autodim_client)
 
     app = FastAPI(title="PCI Web", version="2.0.0")
 
@@ -41,10 +46,11 @@ def create_app(registry, ug405_client=None, rtig_client=None):
         allow_headers     = ["*"],
     )
 
-    app.include_router(mova_router,  prefix="/api/mova",  tags=["MOVA"])
-    app.include_router(ug405_router, prefix="/api/ug405", tags=["UG405"])
-    app.include_router(rtig_router,  prefix="/api/rtig",  tags=["RTIG"])
-    app.include_router(sse_router,   prefix="/sse",        tags=["SSE"])
+    app.include_router(mova_router,    prefix="/api/mova",    tags=["MOVA"])
+    app.include_router(ug405_router,   prefix="/api/ug405",   tags=["UG405"])
+    app.include_router(rtig_router,    prefix="/api/rtig",    tags=["RTIG"])
+    app.include_router(autodim_router, prefix="/api/autodim", tags=["Autodim"])
+    app.include_router(sse_router,     prefix="/sse",         tags=["SSE"])
 
     if os.path.isdir(_STATIC):
         app.mount("/static", StaticFiles(directory=_STATIC), name="static")

@@ -18,6 +18,7 @@ import uvicorn
 from pci.mova.ipc.client        import KernelRegistry
 from pci.ug405.ipc.client       import UG405Client
 from pci.rtig.ipc.client        import RTIGClient
+from pci.autodim.ipc.client     import AutodimClient
 from pci.web.api.app            import create_app
 from pci.web.api.routes.rtig    import create_receiver_app
 
@@ -66,11 +67,13 @@ def main():
     stream_ids, rtig_port = _read_config()
     log.info("MOVA streams: %s  RTIG HTTP port: %d", stream_ids, rtig_port)
 
-    registry     = KernelRegistry(stream_ids)
-    ug405_client = UG405Client()
-    rtig_client  = RTIGClient()
+    registry       = KernelRegistry(stream_ids)
+    ug405_client   = UG405Client()
+    rtig_client    = RTIGClient()
+    autodim_client = AutodimClient()
 
-    app      = create_app(registry, ug405_client=ug405_client, rtig_client=rtig_client)
+    app      = create_app(registry, ug405_client=ug405_client,
+                          rtig_client=rtig_client, autodim_client=autodim_client)
     rtig_app = create_receiver_app(rtig_client)
 
     port = int(os.getenv('PCI_WEB_PORT', '8081'))
