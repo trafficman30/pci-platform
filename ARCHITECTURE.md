@@ -762,12 +762,12 @@ owned input signals) on every reconnect.
 | Runs inside CM5 monolith process           | Runs inside `pci.iobus` process             |
 | Signal names: `xkop.i.N` / `xkop.o.N`     | Same naming convention — carry it over      |
 
-### Phase 4 — UG405  ⬤ IN PROGRESS
+### Phase 4 — UG405  ✓ COMPLETE (4.1 + 4.2)
 
 ```
-4.1  pci.ug405 — SNMP agent UDP 161, instation polls us, reads/writes IOBus
-4.2  IPC live socket to web
-4.3  Web aggregates UG405 alongside MOVA
+4.1  pci.ug405 — SNMP agent UDP 161, instation polls us, reads/writes IOBus  ✓ COMPLETE
+4.2  IPC live socket to web                                                    ✓ COMPLETE
+4.3  Web aggregates UG405 alongside MOVA                                       (Phase 5 web work)
 ```
 
 #### Phase 4 prerequisites — completed
@@ -786,6 +786,38 @@ safe to defer. Revisit at Phase 7 when CM5 ARM64 Debian Python version confirmed
 outstation). Instation (UTC central) polls us via SNMP GET/SET on UDP 161.
 For RBE, we push INFORM packets to InstationAddress:InstationPort (UDP, optional).
 No outbound TCP connection. ARCHITECTURE.md client/server table corrected.
+
+#### Phase 4 implementation notes
+
+**subscribe() is poll-based** — CM5's IOBus is in-process, so `io.subscribe(cb)` fires
+synchronously on every write. PCI's IOBus is a socket server; external services have no
+push channel. `UG405IOBus.set_monitored(signal_names)` starts a 100ms poll thread that
+reads all reply signals via BATCH and fires callbacks on change. Same contract as CM5 —
+`cb(name, value, source)`. Call `set_monitored()` once after `load_ug405()`.
+
+**io.zero_owned_by('ug405')** → `io.zero_owned(control_signals)` — CM5 zeroes by owner
+string (in-process IOBus knows ownership). PCI: ownership is in signals.cfg. The service
+derives `_control_signals` from `cfg['signals'].keys()` at startup.
+
+**Control signal ownership** — control signals must be listed in `config/signals.cfg` as
+owned by `pci.ug405`. Example for a deployment with XKOP:
+```
+xkop.o.101 = pci.ug405
+xkop.o.102 = pci.ug405
+```
+Reply signals are owned by `pci.iobus` (written by drivers) — no signals.cfg entry needed.
+
+**Config path** — defaults to `/opt/pci/config/ug405.cfg`. Override with
+`PCI_UG405_CFG=/path/to/ug405.cfg` environment variable.
+
+**Entry point:**
+```bash
+PYTHONPATH=/opt /opt/pci/venv/bin/python -m pci.ug405.service
+```
+
+**Phase 4.3 deferred** — web routes for UG405 (`web/api/routes/ug405.py`) are built
+in Phase 5 web work alongside rtig, autodim etc. The IPC push socket is ready; web-side
+wiring is the remaining piece.
 
 ### Phase 5 — Remaining services
 
