@@ -850,7 +850,7 @@ PYTHONPATH=/opt /opt/pci/venv/bin/python -m pci.ug405.service
 in Phase 5 web work alongside rtig, autodim etc. The IPC push socket is ready; web-side
 wiring is the remaining piece.
 
-### Phase 5 — Remaining services
+### Phase 5 — Remaining services  ✓ COMPLETE
 
 Before writing any Phase 5 service:
 Read the equivalent service in /opt/CM5 first.
@@ -863,6 +863,45 @@ are needed. Wait for confirmation before writing.
 5.3  pci.offline                                                             ✓ COMPLETE
 5.4  pci.agd / pci.flir                                                      ✓ COMPLETE
 ```
+
+#### Phase 5.4 agd/flir — implementation notes
+
+**pci.agd — AGD650 radar detector adapter**
+
+Transport: ZeroMQ SUB socket. AGD650 is the publisher; we subscribe to
+`tcp://<ip>:<port>`. One thread per unit. ZMQ handles reconnect implicitly.
+
+Change detection: full snapshot frame arrives every ~150ms. Only writes IOBus
+when zone state or class presence changes vs previous frame — not on every frame.
+
+Signal ownership: `pci.agd` owns all agd.* signals. Declared in signals.cfg.
+Signal names discovered via [VIRT_MAPPING] in agd.cfg (unit-qualified key first,
+global fallback). Same scan approach as XKOP/RPDB.
+
+Fault detection: 500ms recv timeout. If no frame received for `frame_timeout`
+seconds (default 5.0), zeros all unit signals and pushes fault event over IPC.
+
+Write-only IOBus adapter — does not read IOBus except to compute global OR bits.
+
+**pci.flir — FLIR camera adapter**
+
+Transport: WebSocket client (`websocket-client` library). FLIR camera is the
+WS server at `ws://<ip>:<port>`. One thread per camera running `run_forever()`.
+Sends subscription message on connect. Reconnects with 5s sleep on close.
+
+Event-driven: no polling. Processes `messageType=Event` messages immediately.
+Writes IOBus signal on each event: Presence/Pedestrian → `occupied`,
+DilemmaZone → `dilemma`, class field → `has_pedestrian`/`has_bicycle`/`has_vehicle`.
+
+Signal ownership: `pci.flir` owns all flir.* signals. Declared in signals.cfg.
+Signal names via [VIRT_MAPPING] in flir.cfg (camera-qualified first, global fallback).
+
+Write-only IOBus adapter — reads back zone signals only to compute global OR bits.
+
+**Dependencies added (Phase 5.4):**
+- `pyzmq` — ZeroMQ bindings for AGD ZMQ SUB socket
+- `websocket-client` — WebSocket client library for FLIR camera connection
+Both added to requirements.txt.
 
 #### Phase 5.2 autodim — pre-write notes (read /opt/CM5/autodim/ before writing)
 
