@@ -793,12 +793,12 @@ owned input signals) on every reconnect.
 | Runs inside CM5 monolith process           | Runs inside `pci.iobus` process             |
 | Signal names: `xkop.i.N` / `xkop.o.N`     | Same naming convention — carry it over      |
 
-### Phase 4 — UG405  ✓ COMPLETE (4.1 + 4.2)
+### Phase 4 — UG405  ✓ COMPLETE
 
 ```
 4.1  pci.ug405 — SNMP agent UDP 161, instation polls us, reads/writes IOBus  ✓ COMPLETE
 4.2  IPC live socket to web                                                    ✓ COMPLETE
-4.3  Web aggregates UG405 alongside MOVA                                       (Phase 5 web work)
+4.3  Web aggregates UG405 alongside MOVA                                       ✓ COMPLETE
 ```
 
 #### Phase 4 prerequisites — completed
@@ -807,7 +807,7 @@ owned input signals) on every reconnect.
 CM5 uses asyncore-based pysnmp v4 API. pyasn1 pinned to 0.4.8 (v4.4.12
 incompatible with newer pyasn1). Both pinned in requirements.txt.
 
-**pysnmp v7 migration deferred to Phase 7** (ARM64 field validation).
+**pysnmp v7 migration deferred to Phase 8** (ARM64 field validation).
 v7 breaks: `pysnmp.carrier.asyncore` removed (asyncore gone in Python 3.12),
 entire API renamed camelCase → snake_case, `runDispatcher()` replaced by
 asyncio event loop. Field target is Python 3.11 (asyncore still present) —
@@ -862,6 +862,8 @@ are needed. Wait for confirmation before writing.
 5.2  pci.autodim                                                             ✓ COMPLETE
 5.3  pci.offline                                                             ✓ COMPLETE
 5.4  pci.agd / pci.flir                                                      ✓ COMPLETE
+5.5  Shared IOBus ownership extension                                        ✓ COMPLETE
+     signals.cfg comma-separated owners, frozenset write enforcement
 ```
 
 #### Phase 5.4 agd/flir — implementation notes
@@ -928,7 +930,7 @@ is_dim = (now >= dim_utc) OR (now < bright_utc)
 **Dependency:** `astral` — added to requirements.txt.
 **TODO before writing:** confirm `astral` installs cleanly in the venv.
 
-### Phase 6 — Log management
+### Phase 6 — Log management  ← next
 
 ```
 6.1  Systemd timer for gzip rotation at 00:05
@@ -936,13 +938,24 @@ is_dim = (now >= dim_utc) OR (now < bright_utc)
 6.3  driver_sim.py JSONL replay mode — replay real junction recordings
 ```
 
-### Phase 7 — ARM64 field deployment
+### Phase 7 — UI design system
 
 ```
-7.1  Debian ARM64 LXC on SER5
-7.2  libmova.so ARM64 compile and test
-7.3  Full service stack on ARM64 — prove identical to x86 dev
-7.4  CM5 bench unit validation
+7.1  Build design.html — extract CSS from CM5 + MOVA, resolve conflicts
+7.2  css/pci.css — single unified stylesheet, all services
+7.3  Port MOVA popup pages from /opt/MOVA/static/
+     dataset, derived, analysis, messages, errors, history
+7.4  Main dashboard index.html
+7.5  Service pages — ug405, rtig, autodim, offline, agd, flir
+```
+
+### Phase 8 — ARM64 field deployment
+
+```
+8.1  Debian ARM64 LXC on SER5
+8.2  libmova.so ARM64 compile and test
+8.3  Full service stack on ARM64 — prove identical to x86 dev
+8.4  CM5 bench unit validation
 ```
 
 ---
