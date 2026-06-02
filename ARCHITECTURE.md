@@ -184,7 +184,21 @@ All services follow `pci.<domain>` pattern.
 │   │   ├── app.py
 │   │   ├── routes/             ← mova.py, ug405.py, iobus.py, rtig.py ...
 │   │   └── ws/                 ← live.py — SSE/WebSocket push to browser
-│   └── static/                 ← all HTML/JS/CSS — from /opt/MOVA static/
+│   └── static/
+│       ├── design.html     ← component library — READ BEFORE ANY UI WORK
+│       │                      built by extracting CM5 + MOVA styles
+│       │                      all CSS variables defined here
+│       │                      no styles invented outside this file
+│       ├── css/pci.css     ← single stylesheet, all services
+│       ├── js/
+│       │   ├── sse.js      ← SSE connection handler (shared)
+│       │   ├── mova.js     ← MOVA stream UI
+│       │   ├── ug405.js    ← UG405 UI
+│       │   └── iobus.js    ← IOBus signal viewer
+│       └── templates/
+│           ├── index.html       ← main dashboard
+│           ├── mova_stream.html ← per-stream detail
+│           └── ug405.html       ← UG405 detail
 │
 ├── shared/
 │   ├── iobus_client.py         ← base IOBus client (all services inherit)
@@ -892,6 +906,10 @@ All PCI service UIs must copy styles from design.html.
 Do not invent colours, spacing, or component styles.
 Do not add inline CSS to Python files.
 All styles live in design.html and linked stylesheets only.
+
+design.html must exist before any template work starts.
+Claude Code must read design.html before writing
+any HTML or CSS. No styles invented outside this file.
 
 ## Python environment
 
