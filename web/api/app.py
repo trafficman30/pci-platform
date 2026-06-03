@@ -79,5 +79,9 @@ def create_app(registry, ug405_client=None, rtig_client=None,
         async def index():
             return FileResponse(os.path.join(_STATIC, "index.html"))
 
+        @app.get("/ug405", include_in_schema=False)
+        async def ug405_page():
+            return FileResponse(os.path.join(_STATIC, "ug405.html"))
+
     log.info("FastAPI app created  streams=%s", registry.all_ids())
     return app

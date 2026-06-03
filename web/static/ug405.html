@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UG405 — PCI Platform</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* ug405.html page-specific — uses only existing design tokens */
+    .cards-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    .cards-row .metric-card { flex: 1; min-width: 140px; }
+    .metric-value.sm { font-size: 14px; }
+    /* Signal value cells */
+    .val-on  { color: var(--green); font-weight: 600; font-family: var(--mono); font-size: 12px; }
+    .val-off { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+    .section-gap { margin-top: 20px; }
+    .scn-block { margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI PLATFORM</div>
+      <div class="logo-sub">UG405 / UTC</div>
+    </div>
+  </div>
+  <div class="conn-indicator">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span id="conn-label">CONNECTING</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+<nav class="sidebar">
+  <div class="nav-group-label">Navigation</div>
+  <a class="nav-item" href="/">
+    <div class="nav-item-dot"></div>&#8592; Dashboard
+  </a>
+  <div class="nav-group-label">UTC / SCOOT</div>
+  <a class="nav-item active">
+    <div class="nav-item-dot"></div>UG405
+  </a>
+</nav>
+
+<main>
+
+  <!-- ── Metric cards ── -->
+  <div class="cards-row">
+    <div class="metric-card">
+      <div class="metric-label">Op Mode</div>
+      <div class="metric-value sm err" id="ug-opmode">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Instation</div>
+      <div class="metric-value sm" id="ug-instation">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">SCNs</div>
+      <div class="metric-value" id="ug-scns">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Last Update</div>
+      <div class="metric-value sm" id="ug-lastupdate">—</div>
+    </div>
+  </div>
+
+  <!-- ── Per-SCN signal tables ── -->
+  <div id="ug-scn-container"></div>
+
+  <!-- ── Instation Config ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Instation Config</div>
+    <div id="ug-cfg-state">
+      <div class="no-content">No config received from instation yet.</div>
+    </div>
+  </div>
+
+  <!-- ── opMode Transitions ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">opMode Transitions</div>
+    <div id="ug-opmode-transitions"></div>
+  </div>
+
+  <!-- ── Control Activity ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Control Activity</div>
+    <div id="ug-ctrl-log">
+      <div class="no-content">No control SETs received yet.</div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<footer>
+  <span class="footer-tick" id="tick">&#9670;</span>
+  <span id="footer-time">—</span>
+  <span id="conn-status">not connected</span>
+</footer>
+
+<script>
+const OPMODE_LABELS  = {1:'1 — Standalone', 2:'2 — Monitor', 3:'3 — UTC Control'};
+const OPMODE_CLASSES = {1:'err', 2:'warn', 3:'ok'};
+const _OM_TRANS      = ['1→2','2→3','3→3','3→2','3→1','2→1'];
+const _OM_COL        = {
+  '1→2':'#1d4ed8','2→3':'#15803d','3→3':'#6b7280',
+  '3→2':'#b45309','3→1':'#b91c1c','2→1':'#b91c1c',
+};
+
+let mapping = null;
+let state = {
+  opmode:             null,   // null = not yet known (prevents false transition on first snap)
+  cfg_state:          {},     // field → {value, ts}
+  opmode_transitions: {},     // 'X→Y' → {ts, reason}
+  ctrl_log:           [],     // [{ts, scn, field, value}, ...]
+};
+let _tickFlip = false;
+
+// ── Mapping + SCN table build ─────────────────────────────────────────────────
+
+async function loadMapping() {
+  try {
+    const r = await fetch('/api/ug405/mapping');
+    if (!r.ok) { console.warn('mapping fetch failed', r.status); return; }
+    mapping = await r.json();
+    document.getElementById('ug-scns').textContent = mapping.scns.length;
+    buildSCNTables();
+  } catch(e) {
+    console.warn('mapping error', e);
+  }
+}
+
+function buildSCNTables() {
+  if (!mapping || !mapping.scns.length) return;
+  const container = document.getElementById('ug-scn-container');
+  container.innerHTML = '';
+  mapping.scns.forEach(scn => {
+    const block = document.createElement('div');
+    block.className = 'scn-block';
+    block.innerHTML = `
+      <div class="section-title" style="margin-bottom:8px">SCN: ${scn}</div>
+      <div class="row2">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Control</div>
+          <div class="table-card"><table>
+            <thead><tr><th>Field</th><th>Signal</th><th>Value</th></tr></thead>
+            <tbody>${buildSCNRows(mapping.control[scn], 'ctrl')}</tbody>
+          </table></div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Reply</div>
+          <div class="table-card"><table>
+            <thead><tr><th>Field</th><th>Signal</th><th>Value</th></tr></thead>
+            <tbody>${buildSCNRows(mapping.reply[scn], 'reply')}</tbody>
+          </table></div>
+        </div>
+      </div>`;
+    container.appendChild(block);
+  });
+}
+
+function buildSCNRows(fields, side) {
+  if (!fields) return '';
+  let rows = '';
+  for (const [field, bits] of Object.entries(fields)) {
+    for (const [bit, sig] of Object.entries(bits)) {
+      const id = `${side}-${sig.replace(/\./g,'_')}`;
+      rows += `<tr>
+        <td>${field}${bit !== '0' ? '['+bit+']' : ''}</td>
+        <td class="td-mono">${sig}</td>
+        <td id="${id}" class="val-off">0</td>
+      </tr>`;
+    }
+  }
+  return rows;
+}
+
+// ── Render functions ──────────────────────────────────────────────────────────
+
+function paintOpMode() {
+  const el = document.getElementById('ug-opmode');
+  if (!el || state.opmode === null) return;
+  el.textContent = OPMODE_LABELS[state.opmode] || ('Mode ' + state.opmode);
+  el.className   = 'metric-value sm ' + (OPMODE_CLASSES[state.opmode] || '');
+}
+
+function applyChanges(changes) {
+  if (!changes) return;
+  changes.forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = val; el.className = val > 0 ? 'val-on' : 'val-off'; }
+  });
+}
+
+function renderOpModeTransitions() {
+  const el = document.getElementById('ug-opmode-transitions');
+  if (!el) return;
+  const t = state.opmode_transitions;
+  let html = '<div class="table-card"><table style="width:100%">'
+    + '<thead><tr><th>Transition</th><th>Last Seen</th></tr></thead><tbody>';
+  for (const tr of _OM_TRANS) {
+    const d      = t[tr];
+    const ts     = d ? d.ts     : null;
+    const reason = d ? d.reason : '';
+    const col    = ts ? (_OM_COL[tr] || 'var(--text)') : 'var(--border)';
+    const label  = ts
+      ? (reason ? `${ts} <span style="color:var(--muted)">(${reason})</span>` : ts)
+      : '—';
+    html += `<tr>
+      <td style="font-weight:600;color:${col}">${tr}</td>
+      <td style="font-size:11px;color:var(--muted)">${label}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function renderCfgState() {
+  const el = document.getElementById('ug-cfg-state');
+  if (!el) return;
+  const cfg = state.cfg_state;
+  if (!Object.keys(cfg).length) {
+    el.innerHTML = '<div class="no-content">No config received from instation yet.</div>';
+    return;
+  }
+  let html = '<div class="table-card"><table style="width:100%">'
+    + '<thead><tr><th>Field</th><th>Value</th><th>Last Set</th></tr></thead><tbody>';
+  for (const [field, d] of Object.entries(cfg)) {
+    html += `<tr>
+      <td class="td-mono">${field}</td>
+      <td style="font-weight:600">${d.value}</td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${d.ts}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function renderCtrlLog() {
+  const el = document.getElementById('ug-ctrl-log');
+  if (!el) return;
+  if (!state.ctrl_log.length) {
+    el.innerHTML = '<div class="no-content">No control SETs received yet.</div>';
+    return;
+  }
+  let html = '<div class="table-card"><table style="width:100%">'
+    + '<thead><tr><th>Time</th><th>SCN</th><th>Field</th><th>Value</th></tr></thead><tbody>';
+  for (const e of state.ctrl_log) {
+    html += `<tr>
+      <td style="white-space:nowrap;font-size:11px;color:var(--muted)">${e.ts}</td>
+      <td>${e.scn}</td>
+      <td class="td-mono">${e.field}</td>
+      <td class="td-mono">${e.value}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ── SSE message handler ───────────────────────────────────────────────────────
+
+function fmtTs(epoch) {
+  if (!epoch) return new Date().toLocaleTimeString('en-GB', {hour12:false});
+  return new Date(epoch * 1000).toLocaleTimeString('en-GB', {hour12:false});
+}
+
+function handleMessage(data) {
+  const t = data.t;
+
+  if (t === 'snap') {
+    if (data.opmode !== undefined) {
+      state.opmode = data.opmode;
+      paintOpMode();
+    }
+    if (data.instation !== undefined)
+      document.getElementById('ug-instation').textContent = data.instation;
+    if (data.ts !== undefined)
+      document.getElementById('ug-lastupdate').textContent = fmtTs(data.ts);
+    if (data.changes)
+      applyChanges(data.changes);
+
+  } else if (t === 'opmode') {
+    const prev = state.opmode;
+    state.opmode = data.opmode;
+    paintOpMode();
+    // Record transition — only if we knew the previous state (not on first connect)
+    if (prev !== null && prev !== data.opmode) {
+      const key = `${prev}→${data.opmode}`;
+      state.opmode_transitions[key] = {ts: fmtTs(data.ts), reason: data.reason || ''};
+      renderOpModeTransitions();
+    }
+
+  } else if (t === 'signal') {
+    applyChanges(data.changes);
+
+  } else if (t === 'config') {
+    // Instation IP:port changed — update display metric only
+    if (data.field === 'instation')
+      document.getElementById('ug-instation').textContent = data.value;
+
+  } else if (t === 'log') {
+    const entry = data.entry;
+    if (!entry) return;
+    const ts = entry.ts || fmtTs(data.ts);
+
+    // Append to ctrl_log (all entries: Config SETs and opMode changes)
+    state.ctrl_log.unshift({
+      ts, scn: entry.scn || '—', field: entry.field || '—', value: entry.value || '—',
+    });
+    if (state.ctrl_log.length > 30) state.ctrl_log.length = 30;
+    renderCtrlLog();
+
+    // Config SETs also update the Instation Config table
+    if (entry.type === 'Config') {
+      state.cfg_state[entry.field] = {value: entry.value, ts};
+      renderCfgState();
+    }
+  }
+
+  // Tick + footer
+  _tickFlip = !_tickFlip;
+  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+  document.getElementById('footer-time').textContent =
+    new Date().toLocaleTimeString('en-GB', {hour12:false});
+}
+
+// ── SSE connection ────────────────────────────────────────────────────────────
+
+const es = new EventSource('/sse/ug405');
+es.onmessage = e => handleMessage(JSON.parse(e.data));
+es.onopen = () => {
+  document.getElementById('conn-dot').className   = 'conn-dot live';
+  document.getElementById('conn-label').textContent  = 'LIVE';
+  document.getElementById('conn-status').textContent = 'connected';
+};
+es.onerror = () => {
+  document.getElementById('conn-dot').className   = 'conn-dot error';
+  document.getElementById('conn-label').textContent  = 'DISCONNECTED';
+  document.getElementById('conn-status').textContent = 'SSE disconnected';
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+renderOpModeTransitions();
+loadMapping();
+</script>
+</body>
+</html>
