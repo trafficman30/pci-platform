@@ -1050,3 +1050,74 @@ ug405.html, iobus.html, rtig.html, autodim.html, offline.html, agd.html, flir.ht
 **Outstanding:**
 - Issue 1: /api/dataset/ router — list, upload, delete, load, info, detail endpoints
 - Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+
+---
+
+## 2026-06-03 — UI connection-loss bug investigation (session ended incomplete)
+
+### Issues found and partially fixed
+
+**Bug 1 — FIXED: blocking send_command in async ping routes**
+All 7 service ping routes called `_client.send_command("PING")` directly inside
+`async def`, without `run_in_executor`. `send_command` opens a unix socket with
+a 3-second timeout. Six sequential pings × 3s = up to 18s of asyncio event loop
+blocked. SSE keepalives stopped firing, browser dropped connections, UI stalled.
+
+Fixed in: `web/api/routes/offline.py`, `rtig.py`, `autodim.py`, `ug405.py`,
+`agd.py`, `flir.py`, `mova.py`. All now use `run_in_executor`. Added missing
+`import asyncio` to `ug405.py`, `agd.py`, `flir.py`.
+
+**Bug 2 — FIXED: SSE thread pool exhaustion**
+SSE generators used `q.get(block=True, timeout=25)` in `run_in_executor`. On
+disconnect (browser tab switch/navigate away), asyncio cancels the generator but
+the thread stays blocked for up to 25s. With only 6 threads on a 2-CPU host
+(`min(32, cpu_count+4)`), a few navigations exhaust the pool — new SSE
+connections queue indefinitely.
+
+Fixed in `web/api/ws/live.py`: timeout 25s → 2s (zombie threads clear in ≤2s,
+keepalives fire more frequently). Fixed in `web/web_main.py`: explicit
+`ThreadPoolExecutor(max_workers=32)` set on event loop startup.
+
+**Bug 3 — NOT YET FIXED: service connection dots go grey on tab switch**
+After the above fixes, the dashboard still loses service indicator dots when
+switching browser tabs. Server is healthy (all pings return pong in <10ms).
+Browser's `pollServices()` uses `AbortSignal.timeout(2000)` — still timing out
+somehow. Suspected causes (not yet confirmed):
+
+- Browser tab throttling: Chrome throttles background tab timers. When tab was
+  backgrounded, `setInterval(pollServices, 5000)` may have been throttled to 1/min.
+  Switching back shows stale (grey) dots until the next poll fires. The browser
+  does NOT immediately poll on `visibilitychange`. **Fix needed:** add
+  `document.addEventListener('visibilitychange', ...)` to re-poll immediately on
+  tab focus.
+
+- HTTP/1.1 connection limit: browsers allow max 6 concurrent connections per
+  origin. With multiple PCI tabs each holding an SSE connection, fetch requests
+  for pings queue behind them. Not confirmed but plausible with many tabs open.
+
+- `system.py` `/api/system/log` reads `pci.log` synchronously (no
+  `run_in_executor`). If pci.log is large, this blocks the event loop.
+  Latent bug even if not the primary cause today.
+
+**Bug 4 — NOTED: autodim not using BST**
+`pci.autodim` uses `astral` for sunrise/sunset. Reported to not use BST
+(British Summer Time). The dim/bright comparison must use timezone-aware
+datetimes. Not investigated yet — carry forward.
+
+**Bug 5 — PORT CONFLICT: pci-rtig receiver on :9010**
+`pci.web` tries to bind RTIG HTTP receiver on port 9010. On this dev host
+that port is occupied; service logs warn but continues.
+**Next session: set `http_port = 9011` in `config/platform.cfg` `[rtig]` section.**
+
+### State at session end (2026-06-03 evening)
+- All 7 pci services stopped cleanly.
+- CM5 monolith (`pci-cm5`) restarted for overnight.
+- Systemd units installed and enabled — start automatically at next boot.
+- `pci-web.service` uses `PCI_WEB_PORT=8082`.
+
+### Next session priorities (in order)
+1. Fix `visibilitychange` handler in `index.html` — re-poll immediately on tab focus
+2. Fix `system.py` `/api/system/log` — wrap file read in `run_in_executor`
+3. Change RTIG receiver port to 9011 in `config/platform.cfg`
+4. Investigate autodim BST issue in `autodim/service.py`
+5. Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
