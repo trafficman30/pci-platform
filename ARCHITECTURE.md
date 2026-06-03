@@ -965,13 +965,15 @@ is_dim = (now >= dim_utc) OR (now < bright_utc)
 
 ### Phase 7.6 — MOVA Tools AML connection  ← GATE for Phase 8
 
-MOVA Tools must connect and display live data before ARM64 deployment begins.
-This is a functional gate, not a nice-to-have.
+MOVA Tools must connect, display live data, and push a dataset before ARM64
+deployment begins. This is a functional gate, not a nice-to-have.
 
 **Background:**
 The `/opt/MOVA` implementation failed to connect MOVA Tools in testing.
-A tcpdump from a working Chameleon outstation is captured in:
+Two tcpdumps from a working Chameleon outstation are captured in:
   `/opt/pci/MICKS_MOVA_TOOLS_INFO_FOR_AML/`
+  - `mova_text.txt` — normal monitoring session (handshake + polling)
+  - `mova_dataset_push.txt` — full dataset push session
 
 **Root cause identified:**
 The `/opt/MOVA` AML server uses wrong framing and encoding:
@@ -982,27 +984,117 @@ The `/opt/MOVA` AML server uses wrong framing and encoding:
 | Booleans | true / false | "T" / "F" |
 | Numbers | actual integers | decimal strings |
 
+**Wire protocol — complete message reference:**
+
+All traffic is on a single persistent TCP connection to port 6000+N.
+Framing: `000000NNN` (9-digit zero-padded byte count) + compact JSON.
+MOVA Tools is always the client; PCI kernel is always the server.
+
+*Monitoring messages (polled continuously by MOVA Tools):*
+```
+ReqCheckConnectedToRightController  {ControllerID: 1}
+  → RspCheckConnectedToRightController  {IsOk: true}
+
+ReqMOVATime  {}
+  → RspMOVATime  {DateTime: "YYYY-MM-DDTHH:MM:SS", IsWallClockTime: false}
+
+ReqOperationFlags  {}
+  → RspOperationFlags  {CRB, IsMOVAEnabled, IsOnControl, IsMultiStage,
+                         ErrorCount, Warmup, DemandedStageNum}
+
+ReqDataPlanTriggeringStatus  {}
+  → RspDataPlanTriggeringStatus  {IsEnabled}
+
+ReqDetectorsStatus  {}
+  → RspDetectorsStatus  {Status: [bool×64], MovaDateTime}
+
+ReqLaneData  {ID: N}
+  → RspLaneData  {RedCountIN, RedCountX, SFSmoothed, SFLastCycle,
+                   ShiftRegister: [bool×51], OversatCounter, Endsat,
+                   QBeyondINDET, LeftOverVehs}
+
+ReqLinkData  {ID: N}
+  → RspLinkData  {BonusGreenTime, SmoothedFlow, Endsat, DemandType,
+                   NetBenFlow, ActualFlow, FutureRedTime, ExtraGreenTime,
+                   EPHoldMarker, EPExtMarker, EPExtTimer}
+
+ReqForceBits  {}
+  → RspForceBits  {ForceBits: [bool×N], TakeOverBit, HurryInhibit}
+
+ReqRawDetectorsStatus  {}
+  → RspRawDetectorsStatus  {Status: [bool×64]}
+
+ReqOutputChannelStatus  {}
+  → RspOutputChannelStatus  {Status: [bool×N]}
+
+ReqAlertStatus  {}
+  → RspAlertStatus  {alerts...}
+
+ReqAlertMonitoringFlags  {}
+  → RspAlertMonitoringFlags  {flags...}
+
+ReqOnControlFlagSetting  {Value: bool}
+  → RspOnControlFlagSetting  {IsSuccessful}
+```
+
+*Dataset push sequence (MOVA Tools sends MXDS to kernel):*
+```
+1. ReqCheckTransferedFileIntegrity  {FileCRC32: uint32}
+   → RspCheckTransferedFileIntegrity  {IsFileOk: bool}
+   (CRC32 of currently-held file on controller; false = no file yet)
+
+2. ReqCheckDatasetCompatibility  {StagesCount, LinksCount, LanesCount}
+   → RspCheckDatasetCompatibility  {IsOk: bool}
+   (MOVA Tools retries until controller is ready to accept)
+
+3. ReqDatasetTransfer  {FileName: str, FileSize: uint32}
+   → RspDatasetTransfer  {IsReadyForTransfer: bool, FailureReason: int}
+   (MOVA Tools retries on FailureReason != 0; FailureReason=2 = busy)
+
+4. [After IsReadyForTransfer:true]
+   MOVA Tools streams FileSize raw bytes inline on the same TCP connection
+   (no framing — just the binary MXDS file content)
+
+5. ← DatasetFileReceived  {TransactionId: matches ReqDatasetTransfer}
+   (Controller pushes this unsolicited once all bytes received)
+
+6. ReqLoadDatasetIntoMemory  {ControllerID, DP1_Index, DP2_Index,
+                               DP3_Index, DP4_Index}
+   → RspLoadDatasetIntoMemory  {IsSuccessful: bool}
+   (Kernel loads the received dataset into the running stream)
+```
+
+Note: MOVA Tools retries steps 2 and 3 on failure — the controller may be
+busy or not yet ready. Polling continues between retries.
+
 **Before writing mova/protocol/aml_server.py:**
-1. Read `/opt/pci/MICKS_MOVA_TOOLS_INFO_FOR_AML/mova_text.txt` — full decoded
-   payload transcript from the working connection
-2. Read `/opt/MOVA/pci_mova/protocol/mova_tools.py` — understand what exists
-   and what is wrong
-3. Summarise findings and wait for confirmation before writing
+1. Read `mova_text.txt` — full decoded monitoring session transcript
+2. Read `mova_dataset_push.txt` — full dataset push transcript
+3. Read `/opt/MOVA/pci_mova/protocol/mova_tools.py` — understand what exists
+   and what is wrong with the framing/encoding
+4. Summarise findings and wait for confirmation before writing
 
 **What to build:**
 ```
 7.6.1  mova/protocol/aml_server.py
        TCP server on port 6000+N (per stream instance)
-       Wire framing: 9-digit zero-padded decimal length + compact JSON
-       Booleans: true/false  Numbers: actual JSON numbers
-       Handshake: ReqCheckConnectedToRightController → RspXxx (IsOk:true)
-       Polling: ReqMOVATime, ReqOperationFlags, ReqDetectorsStatus,
-                ReqLaneData(ID=1..N), ReqLinkData(ID=1..N),
-                ReqForceBits, ReqRawDetectorsStatus, ReqOutputChannelStatus
+       Framing: 9-digit zero-padded decimal + compact JSON
+       Booleans: true/false  Numbers: actual JSON integers/floats
+       Handles all monitoring messages (see table above)
        Reads live data from MovaStream kernel state
-       Runs on background thread inside kernel process (same as /opt/MOVA)
-7.6.2  Wire into kernel_main.py — start AML server on background thread
-7.6.3  Prove: MOVA Tools connects, handshake completes, live data visible
+       Runs on background thread inside kernel process
+
+7.6.2  Dataset push path in aml_server.py
+       ReqCheckTransferedFileIntegrity — CRC32 of held .mxds file
+       ReqCheckDatasetCompatibility — check stages/links/lanes vs dataset
+       ReqDatasetTransfer — accept filename/size, receive raw bytes inline
+       DatasetFileReceived — push to client on receipt complete
+       ReqLoadDatasetIntoMemory — call kernel LOAD (same as IPC LOAD cmd)
+
+7.6.3  Wire into kernel_main.py — start AML server on background thread
+
+7.6.4  Prove: MOVA Tools connects, handshake completes, live data visible
+7.6.5  Prove: MOVA Tools pushes a dataset, kernel loads it, stream restarts
 ```
 
 ### Phase 8 — ARM64 field deployment  ← requires Phase 7.6 complete
