@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCI Design System</title>
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════════════
+       DESIGN TOKENS — source of truth for all PCI service UIs
+       All PCI templates must copy styles from this file.
+       No colours, spacing, or component styles invented outside this file.
+       ═══════════════════════════════════════════════════════════════════════════ */
+    :root {
+      /* Backgrounds */
+      --bg:         #f0f2f5;
+      --bg2:        #ffffff;
+      --bg3:        #f9fafb;
+      --border:     #e5e7eb;
+      /* Chrome */
+      --topbar:     #1a2744;
+      --sidebar-bg: #1e2d50;
+      /* Accent */
+      --accent:     #00d4ff;
+      --accent2:    #2563eb;
+      /* Semantic */
+      --green:      #15803d;
+      --amber:      #b45309;
+      --red:        #b91c1c;
+      /* Text */
+      --text:       #111827;
+      --muted:      #6b7280;
+      /* Status dots */
+      --live:       #00e676;
+      --error-dot:  #ff5252;
+      /* Typography */
+      --mono: "Courier New", monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Topbar ──────────────────────────────────────────────────────────────── */
+    header {
+      background: var(--topbar);
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo          { display: flex; align-items: center; gap: 10px; }
+    .logo-mark     { width: 28px; height: 28px; background: var(--accent); clip-path: polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%); flex-shrink: 0; }
+    .logo-text     { font-weight: 600; font-size: 15px; color: #fff; letter-spacing: .04em; }
+    .logo-sub      { font-size: 10px; color: rgba(255,255,255,.45); font-family: var(--mono); margin-top: 1px; letter-spacing: .06em; }
+    .conn-indicator{ display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.55); }
+    .conn-dot      { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.25); transition: background .3s; flex-shrink: 0; }
+    .conn-dot.live { background: var(--live); box-shadow: 0 0 8px rgba(0,230,118,.6); }
+    .conn-dot.error{ background: var(--error-dot); }
+
+    /* ── Page layout ─────────────────────────────────────────────────────────── */
+    .page-body { display: flex; flex: 1; }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────────── */
+    .sidebar {
+      width: 196px;
+      background: var(--sidebar-bg);
+      flex-shrink: 0;
+      padding: 12px 0;
+      overflow-y: auto;
+      position: sticky;
+      top: 48px;
+      height: calc(100vh - 48px);
+    }
+    .nav-group-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.35);
+      padding: 12px 16px 4px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 16px;
+      font-size: 12px;
+      color: rgba(255,255,255,.7);
+      cursor: pointer;
+      transition: background .12s, color .12s;
+      text-decoration: none;
+    }
+    .nav-item:hover  { background: rgba(0,180,255,.08); color: #fff; }
+    .nav-item.active { background: rgba(0,180,255,.14); color: var(--accent); }
+    .nav-item-dot    { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.2); flex-shrink: 0; }
+    .nav-item.active .nav-item-dot { background: var(--accent); }
+
+    /* ── Main content ────────────────────────────────────────────────────────── */
+    main { flex: 1; padding: 24px; overflow: auto; max-width: 1200px; }
+
+    /* ── Section title ───────────────────────────────────────────────────────── */
+    .section-title {
+      font-size: 11px; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+    }
+
+    /* ── Two-column layout (CM5) ─────────────────────────────────────────────── */
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* ── Status badges (MOVA — live on dark card header) ─────────────────────── */
+    .status-badge         { font-size: 10px; font-weight: 600; padding: 2px 10px; border-radius: 20px; white-space: nowrap; letter-spacing: .04em; font-family: var(--mono); }
+    .status-badge.control { background: #d1fae5; color: #065f46; }
+    .status-badge.warmup  { background: #fef3c7; color: #92400e; }
+    .status-badge.off     { background: rgba(255,255,255,.15); color: rgba(255,255,255,.6); }
+    .status-badge.fault   { background: #fee2e2; color: #991b1b; }
+    .status-badge.nodata  { background: #dbeafe; color: #1e40af; }
+    .status-badge.other   { background: #f0f9ff; color: #0369a1; }
+
+    /* ── Generic badges (on light background) ───────────────────────────────── */
+    .badge        { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; font-family: var(--mono); white-space: nowrap; }
+    .badge-green  { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+    .badge-amber  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+    .badge-red    { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    .badge-purple { background: #ede9fe; color: #5b21b6; }
+    .badge-gray   { background: #f3f4f6; color: #374151; }
+    .badge-plan   { background: #dcfce7; color: #166534; }
+
+    /* ── CM5 pills ───────────────────────────────────────────────────────────── */
+    .pill      { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .pill-ok   { background: #d4edda; color: #155724; }
+    .pill-warn { background: #fff3cd; color: #856404; }
+    .pill-err  { background: #f8d7da; color: #721c24; }
+
+    /* ── Priority labels ─────────────────────────────────────────────────────── */
+    .prio-1 { color: var(--red);   font-weight: 600; font-family: var(--mono); font-size: 11px; }
+    .prio-2 { color: var(--amber); font-weight: 600; font-family: var(--mono); font-size: 11px; }
+    .prio-3 { color: var(--green); font-weight: 600; font-family: var(--mono); font-size: 11px; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────────── */
+    .btn                  { padding: 5px 16px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg2); color: var(--text); font-family: var(--mono); font-size: 11px; cursor: pointer; transition: all .15s; text-transform: uppercase; font-weight: 500; white-space: nowrap; }
+    .btn:hover            { background: var(--bg3); border-color: #9ca3af; }
+    .btn.btn-start:hover  { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+    .btn.btn-stop:hover   { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+    .btn.btn-force:hover  { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    .btn.btn-log          { color: var(--muted); font-size: 10px; }
+    .btn.btn-log:hover    { background: #eff6ff; border-color: #93c5fd; color: var(--accent2); }
+    .btn.btn-load         { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+    .btn.btn-load:hover   { background: #1d4ed8; border-color: #1d4ed8; }
+    .btn.btn-primary      { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+    .btn.btn-primary:hover{ background: #1d4ed8; border-color: #1d4ed8; }
+
+    /* ── Panel ───────────────────────────────────────────────────────────────── */
+    .panel        { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .panel-header { padding: 12px 16px; background: var(--bg3); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .panel-title  { font-weight: 600; font-size: 13px; color: var(--text); }
+    .panel-body   { padding: 16px; }
+
+    /* ── Metric card (CM5) ───────────────────────────────────────────────────── */
+    .metric-card       { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+    .metric-label      { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+    .metric-value      { font-size: 20px; font-weight: 600; color: var(--text); }
+    .metric-value.ok   { color: var(--green); }
+    .metric-value.warn { color: var(--amber); }
+    .metric-value.err  { color: var(--red); }
+
+    /* ── Service toggle switch (CM5) ─────────────────────────────────────────── */
+    .toggle-wrap  { display: flex; align-items: center; gap: 10px; }
+    .toggle-label { font-size: 12px; color: var(--text); }
+    .toggle-sw    { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+    .toggle-sw input { opacity: 0; width: 0; height: 0; }
+    .toggle-sw .slider { position: absolute; cursor: pointer; inset: 0; background: #d1d5db; border-radius: 20px; transition: .2s; }
+    .toggle-sw .slider::before { position: absolute; content: ""; width: 14px; height: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+    .toggle-sw input:checked + .slider                { background: var(--accent2); }
+    .toggle-sw input:checked + .slider::before        { transform: translateX(16px); }
+    .toggle-sw input:disabled + .slider               { background: #9ca3af; cursor: not-allowed; }
+
+    /* ── Config section (CM5) ────────────────────────────────────────────────── */
+    .config-section { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; }
+    .config-header  { padding: 10px 16px; background: var(--bg3); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 12px; color: var(--text); display: flex; align-items: center; justify-content: space-between; }
+    .config-body    { padding: 14px 16px; display: grid; gap: 10px; }
+    .config-row     { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
+    .config-key     { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+
+    /* ── Table card ──────────────────────────────────────────────────────────── */
+    .table-card              { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .table-card table        { width: 100%; border-collapse: collapse; }
+    .table-card th           { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--bg3); padding: 6px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    .table-card td           { padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text); }
+    .table-card tr:last-child td { border-bottom: none; }
+    .table-card tr:hover td  { background: var(--bg3); }
+    .table-card.compact th   { padding: 4px 8px; font-size: 10px; }
+    .table-card.compact td   { padding: 4px 8px; font-size: 11px; }
+    .td-mono { font-family: var(--mono); font-size: 11px; }
+
+    /* ── Stream card (MOVA) ──────────────────────────────────────────────────── */
+    .stream-card         { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: border-color .2s; }
+    .stream-card.active  { border-color: var(--accent); }
+    .stream-card.fault   { border-color: var(--red); }
+    .stream-card.warmup  { border-color: var(--amber); }
+    .stream-card.collapsed .card-body { display: none; }
+
+    /* ── Card header ─────────────────────────────────────────────────────────── */
+    .card-header  { padding: 8px 16px; background: var(--topbar); display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+    .card-title   { font-family: var(--mono); font-size: 13px; font-weight: 600; color: #fff; letter-spacing: .06em; }
+    .card-chevron { color: rgba(255,255,255,.5); font-size: 11px; margin-right: 8px; transition: color .15s; }
+    .card-header:hover .card-chevron { color: #fff; }
+
+    /* ── Status row ──────────────────────────────────────────────────────────── */
+    .card-status-row         { display: flex; border-bottom: 1px solid var(--border); background: var(--bg2); flex-wrap: wrap; }
+    .status-cell             { padding: 8px 16px; border-right: 1px solid var(--border); flex-shrink: 0; }
+    .status-cell:last-child  { border-right: none; }
+    .status-label            { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+    .status-val              { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; }
+    .status-val.on           { color: var(--green); }
+    .status-val.off          { color: var(--muted); }
+    .status-val.warn         { color: var(--amber); }
+    .toggle-btn              { cursor: pointer; border: 1px solid currentColor; border-radius: 3px; padding: 1px 6px; transition: opacity .15s; }
+    .toggle-btn:hover        { opacity: .7; }
+    .crb-light               { width: 10px; height: 10px; border-radius: 50%; background: #d1d5db; flex-shrink: 0; transition: all .2s; }
+    .crb-light.on            { background: var(--green); box-shadow: 0 0 6px rgba(21,128,61,.4); }
+
+    /* ── Card section header + body ──────────────────────────────────────────── */
+    .card-section-hdr  { padding: 4px 16px; background: var(--bg3); border-top: 1px solid var(--border); font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .card-section-body { padding: 10px 16px; }
+
+    /* ── Bit grid ────────────────────────────────────────────────────────────── */
+    .bit-grid  { display: flex; flex-wrap: wrap; row-gap: 8px; }
+    .bit-group { display: flex; margin-right: 16px; }
+    .bit-group:last-child { margin-right: 0; }
+    .bit-cell  { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 4px; }
+    .bit-num   { font-family: var(--mono); font-size: 9px; color: var(--muted); line-height: 1; }
+    .bit-dot          { width: 12px; height: 12px; border-radius: 50%; background: #d1d5db; border: 1px solid #9ca3af; transition: all .1s; }
+    .bit-dot.on       { background: var(--green);   border-color: #15803d;         box-shadow: 0 0 3px rgba(21,128,61,.4); }
+    .bit-dot.amber    { background: var(--amber);   border-color: var(--amber); }
+    .bit-dot.red      { background: var(--red);     border-color: var(--red); }
+    .bit-dot.hi-on    { background: var(--green);   border-color: #15803d;         box-shadow: 0 0 3px rgba(21,128,61,.4); }
+    .bit-dot.sync-on  { background: var(--accent2); border-color: var(--accent2);  box-shadow: 0 0 3px rgba(37,99,235,.4); }
+    .bit-dot.fault-on { background: var(--red);     border-color: var(--red);      box-shadow: 0 0 3px rgba(185,28,28,.4); }
+
+    /* ── Fault items ─────────────────────────────────────────────────────────── */
+    .faults-body { padding: 6px 16px; display: grid; gap: 4px; }
+    .fault-item  { padding: 4px 10px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 3px; font-family: var(--mono); font-size: 11px; color: #991b1b; }
+
+    /* ── Controls row ────────────────────────────────────────────────────────── */
+    .card-controls-row { display: flex; gap: 6px; padding: 10px 16px; border-top: 1px solid var(--border); background: var(--bg3); flex-wrap: wrap; }
+
+    /* ── Input simulation panel ──────────────────────────────────────────────── */
+    /* Detector toggles POST to /api/iobus/write — direct IOBus signal writes,
+       not kernel sim commands. Signal names come from stream config. */
+    .sim-panel           { border-top: 2px solid var(--amber); }
+    .sim-panel-hdr       { display: flex; align-items: center; justify-content: space-between; padding: 5px 16px; background: #fffbeb; cursor: pointer; user-select: none; }
+    .sim-panel-title     { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--amber); }
+    .sim-panel-body      { padding: 10px 16px 12px; background: #fffdf5; display: none; }
+    .sim-panel-body.open { display: block; }
+    .sim-row             { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .sim-row:last-child  { margin-bottom: 0; }
+    .sim-row-label       { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); min-width: 64px; }
+    .sim-btn             { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 3px; border: 1px solid var(--border); background: var(--bg2); color: var(--muted); cursor: pointer; transition: all .12s; white-space: nowrap; }
+    .sim-btn:hover       { border-color: #9ca3af; color: var(--text); }
+    .sim-btn.active      { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+    .sim-btn.crb-active  { background: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+    .sim-btn.none-active { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    .sim-det-grid        { display: flex; flex-wrap: wrap; gap: 3px; }
+    .sim-det-btn         { font-family: var(--mono); font-size: 9px; font-weight: 600; width: 28px; height: 22px; border-radius: 2px; border: 1px solid var(--border); background: var(--bg2); color: var(--muted); cursor: pointer; transition: all .12s; }
+    .sim-det-btn.active  { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+    .sim-note            { font-family: var(--mono); font-size: 9px; color: var(--muted); font-style: italic; }
+
+    /* ── Licence / key-value grid ────────────────────────────────────────────── */
+    .licence-grid        { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .licence-key         { font-size: 10px; color: var(--muted); font-family: var(--mono); margin-bottom: 2px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+    .licence-val         { font-size: 13px; font-weight: 600; font-family: var(--mono); color: var(--text); }
+    .licence-val.ok      { color: var(--green); }
+    .licence-val.nok     { color: var(--red); }
+    .licence-val.neutral { color: var(--text); }
+
+    /* ── Log viewer ──────────────────────────────────────────────────────────── */
+    .log-viewer  { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .log-toolbar { padding: 8px 12px; background: var(--bg3); border-bottom: 1px solid var(--border); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .log-body    { padding: 4px 0; max-height: 260px; overflow-y: auto; }
+    .log-entry   { padding: 3px 12px; font-family: var(--mono); font-size: 11px; display: grid; grid-template-columns: 152px 42px 1fr; gap: 8px; line-height: 1.5; }
+    .log-entry:hover { background: var(--bg3); }
+    .log-ts          { color: var(--muted); }
+    .log-lvl-debug   { color: #9ca3af; }
+    .log-lvl-info    { color: var(--green); }
+    .log-lvl-warn    { color: var(--amber); }
+    .log-lvl-error   { color: var(--red); }
+    .log-lvl-critical{ color: #7c3aed; }
+
+    /* ── Forms / inputs ──────────────────────────────────────────────────────── */
+    .form-input        { font-family: var(--mono); font-size: 11px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg2); color: var(--text); }
+    .form-input:focus  { outline: none; border-color: #0891b2; box-shadow: 0 0 0 2px rgba(8,145,178,.15); }
+    .form-select       { font-family: var(--mono); font-size: 11px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg2); color: var(--text); cursor: pointer; }
+    .search-input      { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg2); color: var(--text); }
+    .search-input:focus{ outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px #e0e7ff; }
+    .search-match      { background: #fef08a; }
+
+    /* ── Toast ───────────────────────────────────────────────────────────────── */
+    #toast-container { position: fixed; bottom: 24px; right: 24px; display: grid; gap: 8px; z-index: 999; }
+    .toast           { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 4px; padding: 10px 16px; font-size: 12px; font-family: var(--mono); max-width: 400px; box-shadow: 0 2px 8px rgba(0,0,0,.08); color: var(--text); animation: toast-in .2s ease; }
+    .toast.error     { border-left-color: var(--red); }
+    .toast.success   { border-left-color: var(--green); }
+    @keyframes toast-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* ── Footer ──────────────────────────────────────────────────────────────── */
+    footer        { background: var(--bg2); border-top: 1px solid var(--border); padding: 10px 20px; display: flex; align-items: center; gap: 20px; font-family: var(--mono); font-size: 10px; color: var(--muted); flex-shrink: 0; }
+    .footer-tick  { color: var(--accent); }
+    .mem-bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .mem-bar      { width: 64px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .mem-bar-fill { height: 100%; border-radius: 2px; }
+
+    /* ── No-content placeholder ──────────────────────────────────────────────── */
+    .no-content { font-family: var(--mono); font-size: 12px; color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; background: var(--bg2); }
+
+    /* ════════════════════════════════════════════════════════════════════════════
+       DESIGN.HTML HELPERS — not production CSS, used only in this reference file
+       ════════════════════════════════════════════════════════════════════════════ */
+    .ds-section  { margin-bottom: 48px; }
+    .ds-heading  { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+    .ds-subhead  { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 8px; }
+    .ds-row      { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+    .ds-swatch   { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .ds-swatch-box  { width: 56px; height: 36px; border-radius: 6px; border: 1px solid rgba(0,0,0,.1); }
+    .ds-swatch-label{ font-family: var(--mono); font-size: 9px; color: var(--muted); text-align: center; }
+    .ds-note     { font-size: 11px; color: var(--muted); font-style: italic; margin-bottom: 8px; }
+    .ds-on-dark  { background: var(--topbar); padding: 12px 16px; border-radius: 6px; display: inline-flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+    .ds-spacer   { width: 1px; height: 24px; background: rgba(255,255,255,.15); }
+    .ds-gap      { height: 16px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Topbar ──────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI DESIGN SYSTEM</div>
+      <div class="logo-sub">COMPONENT REFERENCE</div>
+    </div>
+  </div>
+  <div class="conn-indicator">
+    <div class="conn-dot live"></div>
+    <span>CONNECTED</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+<!-- ── Sidebar ────────────────────────────────────────────────────────────── -->
+<nav class="sidebar">
+  <div class="nav-group-label">Foundation</div>
+  <a class="nav-item active" href="#tokens"><div class="nav-item-dot"></div>Design Tokens</a>
+  <a class="nav-item" href="#typography"><div class="nav-item-dot"></div>Typography</a>
+  <a class="nav-item" href="#layout"><div class="nav-item-dot"></div>Layout</a>
+
+  <div class="nav-group-label">Common</div>
+  <a class="nav-item" href="#badges"><div class="nav-item-dot"></div>Badges &amp; Pills</a>
+  <a class="nav-item" href="#buttons"><div class="nav-item-dot"></div>Buttons</a>
+  <a class="nav-item" href="#tables"><div class="nav-item-dot"></div>Tables</a>
+  <a class="nav-item" href="#panels"><div class="nav-item-dot"></div>Panels &amp; Cards</a>
+  <a class="nav-item" href="#forms"><div class="nav-item-dot"></div>Forms &amp; Inputs</a>
+  <a class="nav-item" href="#feedback"><div class="nav-item-dot"></div>Feedback</a>
+
+  <div class="nav-group-label">MOVA</div>
+  <a class="nav-item" href="#stream-card"><div class="nav-item-dot"></div>Stream Card</a>
+  <a class="nav-item" href="#status-row"><div class="nav-item-dot"></div>Status Row</a>
+  <a class="nav-item" href="#bit-grid"><div class="nav-item-dot"></div>Bit Grid</a>
+  <a class="nav-item" href="#sim-panel"><div class="nav-item-dot"></div>Sim Panel</a>
+
+  <div class="nav-group-label">CM5 / Services</div>
+  <a class="nav-item" href="#metrics"><div class="nav-item-dot"></div>Metrics</a>
+  <a class="nav-item" href="#service-config"><div class="nav-item-dot"></div>Service Config</a>
+  <a class="nav-item" href="#logs"><div class="nav-item-dot"></div>Log Viewer</a>
+  <a class="nav-item" href="#footer-section"><div class="nav-item-dot"></div>Footer</a>
+</nav>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<main>
+
+<!-- ═══ 1. DESIGN TOKENS ═════════════════════════════════════════════════════ -->
+<section class="ds-section" id="tokens">
+<div class="ds-heading">Design Tokens</div>
+
+<div class="ds-subhead">Page &amp; Chrome</div>
+<div class="ds-row">
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#f0f2f5"></div><div class="ds-swatch-label">--bg<br>#f0f2f5</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#ffffff"></div><div class="ds-swatch-label">--bg2<br>#ffffff</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#f9fafb"></div><div class="ds-swatch-label">--bg3<br>#f9fafb</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#e5e7eb"></div><div class="ds-swatch-label">--border<br>#e5e7eb</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#1a2744"></div><div class="ds-swatch-label">--topbar<br>#1a2744</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#1e2d50"></div><div class="ds-swatch-label">--sidebar-bg<br>#1e2d50</div></div>
+</div>
+
+<div class="ds-subhead">Accent &amp; Semantic</div>
+<div class="ds-row">
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#00d4ff"></div><div class="ds-swatch-label">--accent<br>#00d4ff</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#2563eb"></div><div class="ds-swatch-label">--accent2<br>#2563eb</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#15803d"></div><div class="ds-swatch-label">--green<br>#15803d</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#b45309"></div><div class="ds-swatch-label">--amber<br>#b45309</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#b91c1c"></div><div class="ds-swatch-label">--red<br>#b91c1c</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#111827"></div><div class="ds-swatch-label">--text<br>#111827</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#6b7280"></div><div class="ds-swatch-label">--muted<br>#6b7280</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#00e676"></div><div class="ds-swatch-label">--live<br>#00e676</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#ff5252"></div><div class="ds-swatch-label">--error-dot<br>#ff5252</div></div>
+</div>
+
+<div class="ds-subhead">Badge backgrounds (state colours)</div>
+<div class="ds-row">
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#d1fae5;border-color:#6ee7b7"></div><div class="ds-swatch-label">green<br>#d1fae5</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#fef3c7;border-color:#fcd34d"></div><div class="ds-swatch-label">amber<br>#fef3c7</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#fee2e2;border-color:#fca5a5"></div><div class="ds-swatch-label">red<br>#fee2e2</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#dbeafe;border-color:#93c5fd"></div><div class="ds-swatch-label">blue<br>#dbeafe</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#ede9fe"></div><div class="ds-swatch-label">purple<br>#ede9fe</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#f3f4f6"></div><div class="ds-swatch-label">gray<br>#f3f4f6</div></div>
+  <div class="ds-swatch"><div class="ds-swatch-box" style="background:#dcfce7"></div><div class="ds-swatch-label">plan<br>#dcfce7</div></div>
+</div>
+</section>
+
+<!-- ═══ 2. TYPOGRAPHY ════════════════════════════════════════════════════════ -->
+<section class="ds-section" id="typography">
+<div class="ds-heading">Typography</div>
+
+<div class="ds-subhead">Sans — var(--sans) · -apple-system / Segoe UI</div>
+<div style="margin-bottom:6px"><span style="font-size:20px;font-weight:600">Metric value — 20px 600</span></div>
+<div style="margin-bottom:6px"><span style="font-size:15px;font-weight:600">Topbar brand — 15px 600</span></div>
+<div style="margin-bottom:6px"><span style="font-size:13px;font-weight:600">Panel title — 13px 600</span></div>
+<div style="margin-bottom:6px"><span style="font-size:13px">Body — 13px 400</span></div>
+<div style="margin-bottom:6px"><span style="font-size:12px">Table cell — 12px 400</span></div>
+<div style="margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Muted / secondary — 11px 400</span></div>
+<div style="margin-bottom:6px"><span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">SECTION LABEL — 11px 600 UPPERCASE</span></div>
+<div style="margin-bottom:6px"><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">TABLE TH — 10px 600 UPPERCASE</span></div>
+
+<div class="ds-subhead">Mono — var(--mono) · Courier New</div>
+<div style="margin-bottom:6px"><span style="font-family:var(--mono);font-size:13px;font-weight:600">Card title / signal — 13px 600</span></div>
+<div style="margin-bottom:6px"><span style="font-family:var(--mono);font-size:12px;font-weight:600">Status value — 12px 600</span></div>
+<div style="margin-bottom:6px"><span style="font-family:var(--mono);font-size:11px">Log entry / td-mono — 11px 400</span></div>
+<div style="margin-bottom:6px"><span style="font-family:var(--mono);font-size:10px;font-weight:600">Badge text — 10px 600</span></div>
+<div style="margin-bottom:6px"><span style="font-family:var(--mono);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">SECTION HDR — 9px 700 UPPERCASE</span></div>
+<div style="margin-bottom:6px"><span style="font-family:var(--mono);font-size:9px;color:var(--muted)">Bit number label — 9px 400</span></div>
+</section>
+
+<!-- ═══ 3. LAYOUT ═══════════════════════════════════════════════════════════ -->
+<section class="ds-section" id="layout">
+<div class="ds-heading">Layout</div>
+
+<div class="ds-subhead">Topbar components (shown on dark)</div>
+<div class="ds-on-dark">
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI MOVA</div>
+      <div class="logo-sub">RUNTIME v1.0</div>
+    </div>
+  </div>
+  <div class="ds-spacer"></div>
+  <div class="conn-indicator"><div class="conn-dot"></div><span>CONNECTING</span></div>
+  <div class="conn-indicator"><div class="conn-dot live"></div><span>LIVE</span></div>
+  <div class="conn-indicator"><div class="conn-dot error"></div><span>ERROR</span></div>
+</div>
+
+<div class="ds-subhead">Sidebar navigation</div>
+<div style="width:196px;background:var(--sidebar-bg);border-radius:8px;overflow:hidden;padding:10px 0;display:inline-block">
+  <div class="nav-group-label">Streams</div>
+  <a class="nav-item active"><div class="nav-item-dot"></div>Stream 1</a>
+  <a class="nav-item"><div class="nav-item-dot"></div>Stream 2</a>
+  <div class="nav-group-label">Services</div>
+  <a class="nav-item"><div class="nav-item-dot"></div>UG405</a>
+  <a class="nav-item"><div class="nav-item-dot"></div>RTIG</a>
+  <a class="nav-item"><div class="nav-item-dot"></div>Autodim</a>
+  <a class="nav-item"><div class="nav-item-dot"></div>Offline</a>
+  <div class="nav-group-label">Tools</div>
+  <a class="nav-item"><div class="nav-item-dot"></div>IOBus Signals</a>
+  <a class="nav-item"><div class="nav-item-dot"></div>System Log</a>
+</div>
+
+<div class="ds-subhead">section-title</div>
+<div class="section-title">Active Streams</div>
+</section>
+
+<!-- ═══ 4. BADGES & PILLS ════════════════════════════════════════════════════ -->
+<section class="ds-section" id="badges">
+<div class="ds-heading">Badges &amp; Pills</div>
+
+<div class="ds-subhead">status-badge — MOVA stream state (used on dark card header)</div>
+<div class="ds-on-dark">
+  <span class="status-badge control">ON CONTROL</span>
+  <span class="status-badge warmup">WARMUP</span>
+  <span class="status-badge off">OFF</span>
+  <span class="status-badge fault">FAULT</span>
+  <span class="status-badge nodata">NO DATASET</span>
+  <span class="status-badge other">OTHER</span>
+</div>
+
+<div class="ds-subhead">badge — generic (on light background)</div>
+<div class="ds-row">
+  <span class="badge badge-green">OK / ACTIVE</span>
+  <span class="badge badge-amber">WARNING</span>
+  <span class="badge badge-red">ERROR</span>
+  <span class="badge badge-blue">INFO</span>
+  <span class="badge badge-purple">SPECIAL</span>
+  <span class="badge badge-gray">NEUTRAL</span>
+  <span class="badge badge-plan">PLAN ACTIVE</span>
+</div>
+
+<div class="ds-subhead">pill — CM5 service status</div>
+<div class="ds-row">
+  <span class="pill pill-ok">Running</span>
+  <span class="pill pill-warn">Degraded</span>
+  <span class="pill pill-err">Fault</span>
+</div>
+
+<div class="ds-subhead">Priority labels</div>
+<div class="ds-row" style="align-items:center;gap:16px">
+  <span class="prio-1">P1 — Critical</span>
+  <span class="prio-2">P2 — Warning</span>
+  <span class="prio-3">P3 — Info</span>
+</div>
+</section>
+
+<!-- ═══ 5. BUTTONS ═══════════════════════════════════════════════════════════ -->
+<section class="ds-section" id="buttons">
+<div class="ds-heading">Buttons</div>
+<div class="ds-note">Hover states are live — move cursor over buttons to see transitions.</div>
+
+<div class="ds-subhead">Standard variants</div>
+<div class="ds-row">
+  <button class="btn">Default</button>
+  <button class="btn btn-start">Start</button>
+  <button class="btn btn-stop">Stop</button>
+  <button class="btn btn-force">Force</button>
+  <button class="btn btn-log">Dataset</button>
+  <button class="btn btn-log">History</button>
+  <button class="btn btn-load">Load</button>
+  <button class="btn btn-primary">Save</button>
+</div>
+
+<div class="ds-subhead">Hover states (static preview)</div>
+<div class="ds-row">
+  <button class="btn" style="background:var(--bg3);border-color:#9ca3af">Default hover</button>
+  <button class="btn" style="background:#d1fae5;border-color:#6ee7b7;color:#065f46">Start hover</button>
+  <button class="btn" style="background:#fee2e2;border-color:#fca5a5;color:#991b1b">Stop hover</button>
+  <button class="btn" style="background:#fef3c7;border-color:#fcd34d;color:#92400e">Force hover</button>
+  <button class="btn btn-log" style="background:#eff6ff;border-color:#93c5fd;color:#2563eb">Log hover</button>
+</div>
+</section>
+
+<!-- ═══ 6. TABLES ════════════════════════════════════════════════════════════ -->
+<section class="ds-section" id="tables">
+<div class="ds-heading">Tables</div>
+
+<div class="ds-subhead">Standard (6px 12px padding)</div>
+<div class="table-card" style="max-width:640px">
+  <table>
+    <thead><tr><th>Signal</th><th>Value</th><th>Owner</th><th>Last write</th></tr></thead>
+    <tbody>
+      <tr><td class="td-mono">xkop.i.101</td><td class="td-mono">1</td><td>pci.iobus</td><td class="td-mono">14:23:01.045</td></tr>
+      <tr><td class="td-mono">xkop.o.201</td><td class="td-mono">0</td><td>pci.ug405</td><td class="td-mono">14:23:00.910</td></tr>
+      <tr><td class="td-mono">det.0</td><td class="td-mono">1</td><td>pci.iobus</td><td class="td-mono">14:22:59.333</td></tr>
+      <tr><td class="td-mono">virt.dim</td><td class="td-mono">1</td><td>pci.autodim</td><td class="td-mono">18:09:14.000</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="ds-subhead">Compact (4px 8px padding) — used in dataset/analysis popups</div>
+<div class="table-card compact" style="max-width:520px">
+  <table>
+    <thead><tr><th>Stage</th><th>Min</th><th>Max</th><th>Ext</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td class="td-mono">1</td><td class="td-mono">5</td><td class="td-mono">60</td><td class="td-mono">3</td><td><span class="badge badge-green">ACTIVE</span></td></tr>
+      <tr><td class="td-mono">2</td><td class="td-mono">5</td><td class="td-mono">45</td><td class="td-mono">3</td><td><span class="badge badge-gray">IDLE</span></td></tr>
+      <tr><td class="td-mono">3</td><td class="td-mono">5</td><td class="td-mono">30</td><td class="td-mono">3</td><td><span class="badge badge-amber">WAIT</span></td></tr>
+    </tbody>
+  </table>
+</div>
+</section>
+
+<!-- ═══ 7. PANELS & CARDS ════════════════════════════════════════════════════ -->
+<section class="ds-section" id="panels">
+<div class="ds-heading">Panels &amp; Cards</div>
+
+<div class="ds-subhead">panel — standard container (border-radius 8px)</div>
+<div class="panel" style="max-width:480px">
+  <div class="panel-header">
+    <span class="panel-title">System Information</span>
+    <span class="badge badge-green">VALID</span>
+  </div>
+  <div class="panel-body">
+    <div class="licence-grid">
+      <div><div class="licence-key">STATUS</div><div class="licence-val ok">VALID</div></div>
+      <div><div class="licence-key">MAX STREAMS</div><div class="licence-val neutral">4</div></div>
+      <div><div class="licence-key">KERNEL</div><div class="licence-val neutral">M8.0.0.435</div></div>
+      <div><div class="licence-key">LICENCE</div><div class="licence-val nok">UNLICENSED</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="ds-subhead">row2 — two-column grid (CM5)</div>
+<div class="row2" style="max-width:540px">
+  <div class="metric-card"><div class="metric-label">Active Streams</div><div class="metric-value">2</div></div>
+  <div class="metric-card"><div class="metric-label">Fault Count</div><div class="metric-value err">3</div></div>
+  <div class="metric-card"><div class="metric-label">On Control</div><div class="metric-value ok">YES</div></div>
+  <div class="metric-card"><div class="metric-label">Current Stage</div><div class="metric-value warn">—</div></div>
+</div>
+
+<div class="ds-subhead">no-content placeholder</div>
+<div class="no-content" style="max-width:480px">No streams configured. Load a dataset to begin.</div>
+</section>
+
+<!-- ═══ 8. FORMS & INPUTS ════════════════════════════════════════════════════ -->
+<section class="ds-section" id="forms">
+<div class="ds-heading">Forms &amp; Inputs</div>
+
+<div class="ds-subhead">form-input / form-select / search-input</div>
+<div class="ds-row" style="align-items:center">
+  <input class="form-input" type="text" value="192.168.1.100" style="width:160px">
+  <input class="form-input" type="number" value="38400" style="width:100px">
+  <select class="form-select">
+    <option>1x speed</option>
+    <option>2x speed</option>
+    <option>5x speed</option>
+  </select>
+  <input class="search-input" type="text" placeholder="Filter signals…" style="width:180px">
+</div>
+
+<div class="ds-subhead">search-match highlight</div>
+<div style="font-family:var(--mono);font-size:12px;padding:6px 0">xkop.i.<span class="search-match">101</span> — Input from TLC (XKOP index 101)</div>
+
+<div class="ds-subhead">toggle switch (CSS only)</div>
+<div class="ds-row" style="align-items:center;gap:20px">
+  <div class="toggle-wrap">
+    <label class="toggle-sw"><input type="checkbox" checked><span class="slider"></span></label>
+    <span class="toggle-label">Service enabled</span>
+  </div>
+  <div class="toggle-wrap">
+    <label class="toggle-sw"><input type="checkbox"><span class="slider"></span></label>
+    <span class="toggle-label">Service disabled</span>
+  </div>
+  <div class="toggle-wrap">
+    <label class="toggle-sw"><input type="checkbox" disabled><span class="slider"></span></label>
+    <span class="toggle-label" style="color:var(--muted)">Not available</span>
+  </div>
+</div>
+</section>
+
+<!-- ═══ 9. FEEDBACK ══════════════════════════════════════════════════════════ -->
+<section class="ds-section" id="feedback">
+<div class="ds-heading">Feedback</div>
+
+<div class="ds-subhead">Toast notifications (slide in from right)</div>
+<div style="display:flex;flex-direction:column;gap:6px;max-width:440px">
+  <div class="toast">Info — Stream 1: start acknowledged</div>
+  <div class="toast success">Success — Dataset loaded: Junction A v3.mxds</div>
+  <div class="toast error">Error — Connection lost: pci.mova.0.live.sock</div>
+</div>
+
+<div class="ds-gap"></div>
+<div class="ds-subhead">Live toast container (bottom-right, fixed)</div>
+<div class="ds-note">In production: #toast-container is position:fixed bottom:24px right:24px. Click button below to demo.</div>
+<button class="btn" onclick="demoToast()">Fire demo toast</button>
+</section>
+
+<!-- ═══ 10. STREAM CARD — MOVA ═══════════════════════════════════════════════ -->
+<section class="ds-section" id="stream-card">
+<div class="ds-heading">Stream Card — MOVA</div>
+
+<div class="ds-subhead">Active (on control, border: --accent)</div>
+<div class="stream-card active">
+  <div class="card-header">
+    <div style="display:flex;align-items:center;gap:4px">
+      <span class="card-chevron">▼</span>
+      <span class="card-title">STREAM 1</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.5)">ACTIVE DATASET:&nbsp;<span style="color:rgba(255,255,255,.85)">Junction A v3.mxds</span></span>
+      <span class="status-badge control">ON CONTROL</span>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="card-status-row">
+      <div class="status-cell">
+        <div class="status-label">CRB</div>
+        <div class="status-val on"><div class="crb-light on"></div>READY</div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">On Control</div>
+        <div class="status-val on toggle-btn">YES</div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">MOVA Enabled</div>
+        <div class="status-val on toggle-btn">YES</div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">Error Count</div>
+        <div class="status-val">0</div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">Warmup</div>
+        <div class="status-val on">COMPLETE</div>
+      </div>
+    </div>
+    <div class="card-status-row" style="font-size:.82em">
+      <div class="status-cell"><div class="status-label">PM</div><div class="status-val">CONT_IG</div></div>
+      <div class="status-cell"><div class="status-label">CS</div><div class="status-val">2</div></div>
+      <div class="status-cell"><div class="status-label">DS</div><div class="status-val">2</div></div>
+      <div class="status-cell"><div class="status-label">NS</div><div class="status-val">4</div></div>
+      <div class="status-cell"><div class="status-label">WaitT</div><div class="status-val on">3.2s</div></div>
+      <div class="status-cell"><div class="status-label">WU</div><div class="status-val on">NO</div></div>
+      <div class="status-cell"><div class="status-label">SCAN</div><div class="status-val">47</div></div>
+      <div class="status-cell"><div class="status-label">SPEED</div><div class="status-val">1x</div></div>
+      <div class="status-cell"><div class="status-label">TIME</div><div class="status-val" style="font-family:var(--mono)">14:23:01</div></div>
+      <div class="status-cell"><div class="status-label">DATE</div><div class="status-val" style="font-family:var(--mono)">2026-06-03</div></div>
+    </div>
+    <div class="card-section-hdr">Detectors / Channels Status</div>
+    <div class="card-section-body">
+      <div class="bit-grid">
+        <div class="bit-group">
+          <div class="bit-cell"><div class="bit-num">01</div><div class="bit-dot on"></div></div>
+          <div class="bit-cell"><div class="bit-num">02</div><div class="bit-dot"></div></div>
+          <div class="bit-cell"><div class="bit-num">03</div><div class="bit-dot on"></div></div>
+          <div class="bit-cell"><div class="bit-num">04</div><div class="bit-dot"></div></div>
+        </div>
+        <div class="bit-group">
+          <div class="bit-cell"><div class="bit-num">05</div><div class="bit-dot"></div></div>
+          <div class="bit-cell"><div class="bit-num">06</div><div class="bit-dot on"></div></div>
+          <div class="bit-cell"><div class="bit-num">07</div><div class="bit-dot"></div></div>
+          <div class="bit-cell"><div class="bit-num">08</div><div class="bit-dot"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-section-hdr">Confirm Bit Status</div>
+    <div class="card-section-body">
+      <div class="bit-grid">
+        <div class="bit-group">
+          <div class="bit-cell"><div class="bit-num">01</div><div class="bit-dot on"></div></div>
+          <div class="bit-cell"><div class="bit-num">02</div><div class="bit-dot"></div></div>
+          <div class="bit-cell"><div class="bit-num">03</div><div class="bit-dot"></div></div>
+          <div class="bit-cell"><div class="bit-num">04</div><div class="bit-dot"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-section-hdr">Force Bits Status</div>
+    <div class="card-section-body">
+      <div class="bit-grid">
+        <div class="bit-group">
+          <div class="bit-cell"><div class="bit-num">01</div><div class="bit-dot on"></div></div>
+          <div class="bit-cell"><div class="bit-num">02</div><div class="bit-dot"></div></div>
+          <div class="bit-cell"><div class="bit-num">03</div><div class="bit-dot"></div></div>
+          <div class="bit-cell"><div class="bit-num">04</div><div class="bit-dot"></div></div>
+        </div>
+        <div class="bit-group" style="margin-left:10px;border-left:1px solid var(--border);padding-left:10px">
+          <div class="bit-cell"><div class="bit-num">HI</div><div class="bit-dot hi-on"></div></div>
+          <div class="bit-cell"><div class="bit-num">SYNC</div><div class="bit-dot"></div></div>
+          <div class="bit-cell"><div class="bit-num">FLT</div><div class="bit-dot"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-controls-row">
+      <button class="btn btn-start">Start</button>
+      <button class="btn btn-stop">Stop</button>
+      <button class="btn btn-force">Force</button>
+      <button class="btn">Reset</button>
+      <button class="btn btn-log">Dataset</button>
+      <button class="btn btn-log">Derived</button>
+      <button class="btn btn-log">Messages</button>
+      <button class="btn btn-log">Errors</button>
+      <button class="btn btn-log">History</button>
+      <button class="btn btn-log">Analysis</button>
+    </div>
+  </div>
+</div>
+
+<div class="ds-gap"></div>
+<div class="ds-subhead">Fault state (border: --red)</div>
+<div class="stream-card fault">
+  <div class="card-header">
+    <div style="display:flex;align-items:center;gap:4px">
+      <span class="card-chevron">▼</span>
+      <span class="card-title">STREAM 2</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.5)">ACTIVE DATASET:&nbsp;<span style="color:rgba(255,255,255,.85)">Junction B v1.mxds</span></span>
+      <span class="status-badge fault">FAULT</span>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="card-status-row">
+      <div class="status-cell"><div class="status-label">CRB</div><div class="status-val off"><div class="crb-light"></div>NOT READY</div></div>
+      <div class="status-cell"><div class="status-label">On Control</div><div class="status-val off">NO</div></div>
+      <div class="status-cell"><div class="status-label">Error Count</div><div class="status-val warn">2</div></div>
+    </div>
+    <div class="faults-body">
+      <div class="fault-item">⚠ MULTI_CONFIRMS — Multiple confirm bits set simultaneously (error 42)</div>
+      <div class="fault-item">⚠ NO_CRB — Controller ready bit lost (error 7)</div>
+    </div>
+    <div class="card-controls-row">
+      <button class="btn btn-start">Start</button>
+      <button class="btn btn-stop">Stop</button>
+      <button class="btn">Reset</button>
+    </div>
+  </div>
+</div>
+
+<div class="ds-gap"></div>
+<div class="ds-subhead">Warmup state (border: --amber)</div>
+<div class="stream-card warmup">
+  <div class="card-header">
+    <div style="display:flex;align-items:center;gap:4px">
+      <span class="card-chevron">▼</span>
+      <span class="card-title">STREAM 1</span>
+    </div>
+    <span class="status-badge warmup">WARMUP</span>
+  </div>
+  <div class="card-body">
+    <div class="card-status-row">
+      <div class="status-cell"><div class="status-label">CRB</div><div class="status-val off"><div class="crb-light"></div>NOT READY</div></div>
+      <div class="status-cell"><div class="status-label">On Control</div><div class="status-val off">NO</div></div>
+      <div class="status-cell"><div class="status-label">MOVA Enabled</div><div class="status-val on">YES</div></div>
+      <div class="status-cell"><div class="status-label">Warmup</div><div class="status-val warn">3 / 8</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="ds-gap"></div>
+<div class="ds-subhead">Collapsed state</div>
+<div class="stream-card active collapsed">
+  <div class="card-header">
+    <div style="display:flex;align-items:center;gap:4px">
+      <span class="card-chevron">▶</span>
+      <span class="card-title">STREAM 1</span>
+    </div>
+    <span class="status-badge control">ON CONTROL</span>
+  </div>
+</div>
+
+<div class="ds-gap"></div>
+<div class="ds-subhead">No dataset / idle</div>
+<div class="stream-card">
+  <div class="card-header">
+    <div style="display:flex;align-items:center;gap:4px">
+      <span class="card-chevron">▼</span>
+      <span class="card-title">STREAM 2</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.5)">ACTIVE DATASET:&nbsp;<span style="color:rgba(255,255,255,.45)">—</span></span>
+      <span class="status-badge nodata">NO DATASET</span>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="card-controls-row">
+      <button class="btn btn-load">Load Dataset</button>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══ 11. STATUS ROW ════════════════════════════════════════════════════════ -->
+<section class="ds-section" id="status-row">
+<div class="ds-heading">Status Row — all value states</div>
+<div class="panel">
+  <div class="card-status-row">
+    <div class="status-cell">
+      <div class="status-label">CRB (on)</div>
+      <div class="status-val on"><div class="crb-light on"></div>READY</div>
+    </div>
+    <div class="status-cell">
+      <div class="status-label">CRB (off)</div>
+      <div class="status-val off"><div class="crb-light"></div>NOT READY</div>
+    </div>
+    <div class="status-cell">
+      <div class="status-label">Toggle (on)</div>
+      <div class="status-val on toggle-btn">YES</div>
+    </div>
+    <div class="status-cell">
+      <div class="status-label">Toggle (off)</div>
+      <div class="status-val off toggle-btn">NO</div>
+    </div>
+    <div class="status-cell">
+      <div class="status-label">Warn value</div>
+      <div class="status-val warn">3 / 8</div>
+    </div>
+    <div class="status-cell">
+      <div class="status-label">Plain value</div>
+      <div class="status-val">42</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══ 12. BIT GRID ══════════════════════════════════════════════════════════ -->
+<section class="ds-section" id="bit-grid">
+<div class="ds-heading">Bit Grid — all dot states</div>
+
+<div class="ds-subhead">All states side by side</div>
+<div class="panel"><div class="card-section-body">
+  <div class="bit-grid">
+    <div class="bit-group">
+      <div class="bit-cell"><div class="bit-num">off</div><div class="bit-dot"></div></div>
+      <div class="bit-cell"><div class="bit-num">on</div><div class="bit-dot on"></div></div>
+      <div class="bit-cell"><div class="bit-num">amb</div><div class="bit-dot amber"></div></div>
+      <div class="bit-cell"><div class="bit-num">red</div><div class="bit-dot red"></div></div>
+      <div class="bit-cell"><div class="bit-num">HI</div><div class="bit-dot hi-on"></div></div>
+      <div class="bit-cell"><div class="bit-num">SYNC</div><div class="bit-dot sync-on"></div></div>
+      <div class="bit-cell"><div class="bit-num">FLT</div><div class="bit-dot fault-on"></div></div>
+    </div>
+  </div>
+</div></div>
+
+<div class="ds-subhead">Typical 16-detector display (4 groups of 4)</div>
+<div class="panel"><div class="card-section-body">
+  <div class="bit-grid">
+    <div class="bit-group">
+      <div class="bit-cell"><div class="bit-num">01</div><div class="bit-dot on"></div></div>
+      <div class="bit-cell"><div class="bit-num">02</div><div class="bit-dot"></div></div>
+      <div class="bit-cell"><div class="bit-num">03</div><div class="bit-dot on"></div></div>
+      <div class="bit-cell"><div class="bit-num">04</div><div class="bit-dot"></div></div>
+    </div>
+    <div class="bit-group">
+      <div class="bit-cell"><div class="bit-num">05</div><div class="bit-dot"></div></div>
+      <div class="bit-cell"><div class="bit-num">06</div><div class="bit-dot on"></div></div>
+      <div class="bit-cell"><div class="bit-num">07</div><div class="bit-dot amber"></div></div>
+      <div class="bit-cell"><div class="bit-num">08</div><div class="bit-dot"></div></div>
+    </div>
+    <div class="bit-group">
+      <div class="bit-cell"><div class="bit-num">09</div><div class="bit-dot"></div></div>
+      <div class="bit-cell"><div class="bit-num">10</div><div class="bit-dot"></div></div>
+      <div class="bit-cell"><div class="bit-num">11</div><div class="bit-dot on"></div></div>
+      <div class="bit-cell"><div class="bit-num">12</div><div class="bit-dot"></div></div>
+    </div>
+    <div class="bit-group">
+      <div class="bit-cell"><div class="bit-num">13</div><div class="bit-dot"></div></div>
+      <div class="bit-cell"><div class="bit-num">14</div><div class="bit-dot"></div></div>
+      <div class="bit-cell"><div class="bit-num">15</div><div class="bit-dot"></div></div>
+      <div class="bit-cell"><div class="bit-num">16</div><div class="bit-dot fault-on"></div></div>
+    </div>
+    <div class="bit-group" style="margin-left:16px;border-left:1px solid var(--border);padding-left:16px">
+      <div class="bit-cell"><div class="bit-num">HI</div><div class="bit-dot hi-on"></div></div>
+      <div class="bit-cell"><div class="bit-num">SYNC</div><div class="bit-dot sync-on"></div></div>
+      <div class="bit-cell"><div class="bit-num">FLT</div><div class="bit-dot"></div></div>
+    </div>
+  </div>
+</div></div>
+</section>
+
+<!-- ═══ 13. SIMULATION PANEL ══════════════════════════════════════════════════ -->
+<section class="ds-section" id="sim-panel">
+<div class="ds-heading">Input Simulation Panel</div>
+<div class="ds-note">Shown open. Detector toggles write directly to IOBus via POST /api/iobus/write — not old kernel /api/streams/{id}/io commands.</div>
+
+<div class="panel" style="max-width:700px">
+  <div class="sim-panel">
+    <div class="sim-panel-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.sim-panel-title').textContent=(this.nextElementSibling.classList.contains('open')?'▼':'▶')+' Input Simulation'">
+      <span class="sim-panel-title">▼ Input Simulation</span>
+      <span class="sim-note">4 stages · stagon=1 (Closed)</span>
+    </div>
+    <div class="sim-panel-body open">
+      <div class="sim-row">
+        <span class="sim-row-label">CRB</span>
+        <button class="sim-btn crb-active">ON</button>
+        <span class="sim-note">Controller Ready Bit — must be ON for MOVA to leave warmup</span>
+      </div>
+      <div class="sim-row">
+        <span class="sim-row-label">Auto-Follow</span>
+        <button class="sim-btn">OFF</button>
+        <span class="sim-note">Confirms automatically track forced stage</span>
+      </div>
+      <div class="sim-row">
+        <span class="sim-row-label">Confirms</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="sim-btn active">Stg 1</button>
+          <button class="sim-btn none-active">Stg 2</button>
+          <button class="sim-btn">Stg 3</button>
+          <button class="sim-btn">Stg 4</button>
+        </div>
+      </div>
+      <div class="sim-row">
+        <span class="sim-row-label">Detectors</span>
+        <div class="sim-det-grid">
+          <button class="sim-det-btn active">1</button>
+          <button class="sim-det-btn">2</button>
+          <button class="sim-det-btn active">3</button>
+          <button class="sim-det-btn">4</button>
+          <button class="sim-det-btn">5</button>
+          <button class="sim-det-btn">6</button>
+          <button class="sim-det-btn">7</button>
+          <button class="sim-det-btn">8</button>
+          <button class="sim-det-btn">9</button>
+          <button class="sim-det-btn">10</button>
+          <button class="sim-det-btn">11</button>
+          <button class="sim-det-btn">12</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══ 14. METRICS — CM5 ════════════════════════════════════════════════════ -->
+<section class="ds-section" id="metrics">
+<div class="ds-heading">Metric Cards — CM5</div>
+
+<div class="ds-subhead">metric-card (all value states)</div>
+<div class="row2" style="max-width:540px">
+  <div class="metric-card"><div class="metric-label">Active Faults</div><div class="metric-value">0</div></div>
+  <div class="metric-card"><div class="metric-label">On Control</div><div class="metric-value ok">YES</div></div>
+  <div class="metric-card"><div class="metric-label">Active Alarms</div><div class="metric-value err">3</div></div>
+  <div class="metric-card"><div class="metric-label">Current Stage</div><div class="metric-value warn">WARMUP</div></div>
+</div>
+</section>
+
+<!-- ═══ 15. SERVICE CONFIG — CM5 ════════════════════════════════════════════ -->
+<section class="ds-section" id="service-config">
+<div class="ds-heading">Service Configuration — CM5</div>
+
+<div class="ds-subhead">config-section</div>
+<div style="max-width:520px">
+  <div class="config-section">
+    <div class="config-header">
+      UG405 — SNMP Agent (UTC Type 2)
+      <span class="pill pill-ok">Running</span>
+    </div>
+    <div class="config-body">
+      <div class="config-row"><span class="config-key">service</span><span>pci.ug405</span></div>
+      <div class="config-row"><span class="config-key">port</span><span style="font-family:var(--mono)">UDP 161</span></div>
+      <div class="config-row"><span class="config-key">config</span><span style="font-family:var(--mono);font-size:11px">/opt/pci/config/ug405.cfg</span></div>
+      <div class="config-row">
+        <span class="config-key">enabled</span>
+        <div class="toggle-wrap">
+          <label class="toggle-sw"><input type="checkbox" checked><span class="slider"></span></label>
+          <span class="toggle-label">Enabled</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="config-section">
+    <div class="config-header">
+      Autodim — Astronomical dim/bright
+      <span class="pill pill-warn">Degraded</span>
+    </div>
+    <div class="config-body">
+      <div class="config-row"><span class="config-key">service</span><span>pci.autodim</span></div>
+      <div class="config-row"><span class="config-key">current</span><span class="badge badge-amber">DIM</span></div>
+      <div class="config-row">
+        <span class="config-key">enabled</span>
+        <div class="toggle-wrap">
+          <label class="toggle-sw"><input type="checkbox"><span class="slider"></span></label>
+          <span class="toggle-label">Disabled</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══ 16. LOG VIEWER ════════════════════════════════════════════════════════ -->
+<section class="ds-section" id="logs">
+<div class="ds-heading">Log Viewer</div>
+<div class="log-viewer" style="max-width:820px">
+  <div class="log-toolbar">
+    <button class="btn" style="font-size:10px;padding:3px 10px">All</button>
+    <button class="btn" style="font-size:10px;padding:3px 10px;color:var(--green)">INFO</button>
+    <button class="btn" style="font-size:10px;padding:3px 10px;color:var(--amber)">WARN</button>
+    <button class="btn" style="font-size:10px;padding:3px 10px;color:var(--red)">ERROR</button>
+    <button class="btn" style="font-size:10px;padding:3px 10px;color:#7c3aed">CRIT</button>
+    <input class="search-input" type="text" placeholder="Filter…" style="margin-left:auto;width:160px">
+  </div>
+  <div class="log-body">
+    <div class="log-entry"><span class="log-ts">2026-06-03 14:23:01</span><span class="log-lvl-info">INFO</span><span>Stream 1: phase change 2→4</span></div>
+    <div class="log-entry"><span class="log-ts">2026-06-03 14:22:58</span><span class="log-lvl-debug">DEBG</span><span>IOBus BATCH: det.0=1 det.1=0 crb=1 (round trip 0.3ms)</span></div>
+    <div class="log-entry"><span class="log-ts">2026-06-03 14:22:55</span><span class="log-lvl-warn">WARN</span><span>UG405: no response from instation (timeout 5.0s)</span></div>
+    <div class="log-entry"><span class="log-ts">2026-06-03 14:22:50</span><span class="log-lvl-error">ERR </span><span>MOVA fault: MULTI_CONFIRMS — error_id=42 data=0x06</span></div>
+    <div class="log-entry"><span class="log-ts">2026-06-03 14:22:48</span><span class="log-lvl-critical">CRIT</span><span>IOBus: write rejected — pci.rtig not owner of xkop.o.101</span></div>
+    <div class="log-entry"><span class="log-ts">2026-06-03 14:22:45</span><span class="log-lvl-info">INFO</span><span>pci.autodim: dim transition (sunset 20:09 UTC + 0min)</span></div>
+    <div class="log-entry"><span class="log-ts">2026-06-03 14:22:40</span><span class="log-lvl-info">INFO</span><span>RTIG: TLP received — 1 rule matched, pulse det.0 200ms</span></div>
+  </div>
+</div>
+</section>
+
+<!-- ═══ 17. FOOTER ════════════════════════════════════════════════════════════ -->
+<section class="ds-section" id="footer-section">
+<div class="ds-heading">Footer</div>
+<div class="ds-subhead">Memory bar states (green &lt;60% → amber 60–80% → red &gt;80%)</div>
+<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+  <footer>
+    <span>PCI MOVA RUNTIME</span><span>·</span>
+    <span class="footer-tick">●</span>
+    <span>14:23:01</span><span>·</span>
+    <span>2 / 4 streams</span><span>·</span>
+    <span style="opacity:.7">Kernel: M8.0.0.435</span><span>·</span>
+    <div class="mem-bar-wrap">
+      <span>35%</span>
+      <div class="mem-bar"><div class="mem-bar-fill" style="width:35%;background:var(--green)"></div></div>
+    </div>
+    <div class="mem-bar-wrap">
+      <span>68%</span>
+      <div class="mem-bar"><div class="mem-bar-fill" style="width:68%;background:var(--amber)"></div></div>
+    </div>
+    <div class="mem-bar-wrap">
+      <span>91%</span>
+      <div class="mem-bar"><div class="mem-bar-fill" style="width:91%;background:var(--red)"></div></div>
+    </div>
+  </footer>
+</div>
+</section>
+
+</main>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+function demoToast() {
+  const types = [['', 'Info — Stream 1: start acknowledged'], ['success', 'Success — Dataset loaded: Junction A v3.mxds'], ['error', 'Error — Connection lost: pci.mova.0']];
+  const [type, msg] = types[Math.floor(Math.random() * types.length)];
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg;
+  c.appendChild(t); setTimeout(() => t.remove(), 4000);
+}
+</script>
+</body>
+</html>

@@ -1008,7 +1008,7 @@ design reference file. Built by extracting and unifying
 CSS from both existing UIs.
 
 ### First task before any UI work
-Read /opt/CM5/web/web.py and /opt/MOVA equivalent.
+Read /opt/CM5/cm5_web.py and /opt/MOVA/pci_mova/web/static/.
 Extract all inline CSS, colours, fonts, spacing.
 Resolve conflicts in favour of CM5 where it looks better.
 Build design.html with every component defined.
@@ -1024,16 +1024,16 @@ Claude Code must read design.html before writing
 any HTML or CSS. No styles invented outside this file.
 
 Before building any MOVA UI page, read the equivalent 
-popup from /opt/MOVA/pci_mova/static/ and port it 
+popup from /opt/MOVA/pci_mova/web/static/ and port it 
 directly. Do not rebuild from scratch.
 
 Pages to port:
-- Dataset popup    → /opt/MOVA/pci_mova/static/dataset.html
-- Derived popup    → /opt/MOVA/pci_mova/static/derived.html  
-- Analysis popup   → /opt/MOVA/pci_mova/static/analysis.html
-- Messages popup   → /opt/MOVA/pci_mova/static/messages.html
-- Errors popup     → /opt/MOVA/pci_mova/static/errors.html
-- History popup    → /opt/MOVA/pci_mova/static/history.html
+- Dataset popup    → /opt/MOVA/pci_mova/web/static/dataset.html
+- Derived popup    → /opt/MOVA/pci_mova/web/static/derived.html  
+- Analysis popup   → /opt/MOVA/pci_mova/web/static/analysis.html
+- Messages popup   → /opt/MOVA/pci_mova/web/static/messages.html
+- Errors popup     → /opt/MOVA/pci_mova/web/static/errors.html
+- History popup    → /opt/MOVA/pci_mova/web/static/history.html
 
 Read the file, understand it, adapt to new CSS/JS 
 structure. Never rewrite from memory.
