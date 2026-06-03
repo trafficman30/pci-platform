@@ -31,7 +31,7 @@ async def ping():
 async def set_enabled(value: int):
     if _client is None:
         raise HTTPException(503, "autodim client not initialised")
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     ack  = await loop.run_in_executor(
         None, _client.send_command, f"SET_ENABLED {1 if value else 0}"
     )

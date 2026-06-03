@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from pci.web.api.routes.iobus   import router as iobus_router
+from pci.web.api.routes.system  import router as system_router
 from pci.web.api.routes.mova    import router as mova_router,    set_registry as mova_set_reg
 from pci.web.api.routes.ug405   import router as ug405_router,   set_client   as ug405_set_client
 from pci.web.api.routes.rtig    import router as rtig_router,    set_client   as rtig_set_client, create_receiver_app
@@ -64,6 +65,7 @@ def create_app(registry, ug405_client=None, rtig_client=None,
         allow_headers     = ["*"],
     )
 
+    app.include_router(system_router,  prefix="/api/system",  tags=["System"])
     app.include_router(iobus_router,   prefix="/api/iobus",   tags=["IOBus"])
     app.include_router(mova_router,    prefix="/api/mova",    tags=["MOVA"])
     app.include_router(ug405_router,   prefix="/api/ug405",   tags=["UG405"])

@@ -486,7 +486,7 @@ function updateCard(id, s) {
   }
 
   // Bit grids
-  updateBitGrid(`dets-${id}`,   buffers.kernel_deton || buffers.detectors || [], 4);
+  updateBitGrid(`dets-${id}`,   (s.dataset ? buffers.kernel_deton : buffers.detectors) || [], 4);
   updateDetTooltips(`dets-${id}`, s.detector_meta || []);
   updateBitGrid(`confs-${id}`,  buffers.confirms || [], 4);
   updateForceBits(`forces-${id}`, buffers.forces || [], io.to || 0);
