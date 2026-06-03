@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FLIR — PCI Platform</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* flir.html page-specific — uses only existing design tokens */
+    .cards-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    .cards-row .metric-card { flex: 1; min-width: 130px; }
+    .metric-value.sm { font-size: 14px; }
+    .section-gap { margin-top: 20px; }
+
+    /* Per-camera block: custom header sitting above a table-card */
+    .cam-block { margin-bottom: 16px; }
+    .cam-hdr {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      font-family: var(--mono);
+    }
+    .cam-id   { font-weight: 700; font-size: 12px; }
+    .cam-addr { font-size: 11px; color: var(--muted); flex: 1; }
+    .cam-block .table-card { border-radius: 0 0 8px 8px; }
+
+    /* Zone signal dots */
+    .sig-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #d1d5db;
+      border: 1px solid #9ca3af;
+      transition: all .1s;
+    }
+    .sig-dot.on {
+      background: var(--green);
+      border-color: #15803d;
+      box-shadow: 0 0 3px rgba(21,128,61,.4);
+    }
+    .sig-dot.dilemma.on {
+      background: var(--amber);
+      border-color: var(--amber);
+      box-shadow: 0 0 3px rgba(180,83,9,.4);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI PLATFORM</div>
+      <div class="logo-sub">FLIR Camera Adapter</div>
+    </div>
+  </div>
+  <div class="conn-indicator">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span id="conn-label">CONNECTING</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+<nav class="sidebar">
+  <div class="nav-group-label">Navigation</div>
+  <a class="nav-item" href="/">
+    <div class="nav-item-dot"></div>&#8592; Dashboard
+  </a>
+  <div class="nav-group-label">Services</div>
+  <a class="nav-item active">
+    <div class="nav-item-dot"></div>FLIR
+  </a>
+</nav>
+
+<main>
+
+  <!-- ── Metric cards ── -->
+  <div class="cards-row">
+    <div class="metric-card">
+      <div class="metric-label">Cameras</div>
+      <div class="metric-value" id="m-cameras">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total Zones</div>
+      <div class="metric-value" id="m-zones">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Last Update</div>
+      <div class="metric-value sm" id="m-lastupdate">—</div>
+    </div>
+  </div>
+
+  <!-- ── Per-camera zone tables ── -->
+  <div id="cameras-container">
+    <div class="no-content">Waiting for data…</div>
+  </div>
+
+  <!-- ── Zone events ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Zone Events (last 20)</div>
+    <div id="events-log">
+      <div class="no-content">No events yet.</div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<footer>
+  <span class="footer-tick" id="tick">&#9670;</span>
+  <span id="footer-time">—</span>
+  <span id="conn-status">not connected</span>
+</footer>
+
+<script>
+let _tickFlip = false;
+
+// ── Render cameras ────────────────────────────────────────────────────────────
+
+function renderCameras(cameras) {
+  const container = document.getElementById('cameras-container');
+  if (!cameras || !cameras.length) {
+    container.innerHTML = '<div class="no-content">No cameras configured.</div>';
+    return;
+  }
+
+  let totalZones = 0;
+  let html = '';
+
+  for (const cam of cameras) {
+    totalZones += cam.zones.length;
+
+    let rows = '';
+    for (const z of cam.zones) {
+      const dots = [
+        `<span class="sig-dot${z.occupied       ? ' on' : ''}" title="occupied"></span>`,
+        `<span class="sig-dot dilemma${z.dilemma ? ' on' : ''}" title="dilemma"></span>`,
+        `<span class="sig-dot${z.has_pedestrian  ? ' on' : ''}" title="pedestrian"></span>`,
+        `<span class="sig-dot${z.has_bicycle     ? ' on' : ''}" title="bicycle"></span>`,
+        `<span class="sig-dot${z.has_vehicle     ? ' on' : ''}" title="vehicle"></span>`,
+      ];
+      rows += `<tr>
+        <td class="td-mono">${z.id}</td>
+        <td style="text-align:center">${dots[0]}</td>
+        <td style="text-align:center">${dots[1]}</td>
+        <td style="text-align:center">${dots[2]}</td>
+        <td style="text-align:center">${dots[3]}</td>
+        <td style="text-align:center">${dots[4]}</td>
+      </tr>`;
+    }
+
+    const noZones = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No zones</td></tr>';
+
+    html += `
+<div class="cam-block">
+  <div class="cam-hdr">
+    <span class="cam-id">${cam.id}</span>
+    <span class="cam-addr">${cam.ip}:${cam.port}</span>
+  </div>
+  <div class="table-card">
+    <table style="width:100%">
+      <thead>
+        <tr>
+          <th>Zone</th>
+          <th style="text-align:center">Occupied</th>
+          <th style="text-align:center">Dilemma</th>
+          <th style="text-align:center">Pedestrian</th>
+          <th style="text-align:center">Bicycle</th>
+          <th style="text-align:center">Vehicle</th>
+        </tr>
+      </thead>
+      <tbody>${rows || noZones}</tbody>
+    </table>
+  </div>
+</div>`;
+  }
+
+  container.innerHTML = html;
+  document.getElementById('m-cameras').textContent = cameras.length;
+  document.getElementById('m-zones').textContent   = totalZones;
+}
+
+// ── Render events ─────────────────────────────────────────────────────────────
+
+function renderEvents(events) {
+  const el = document.getElementById('events-log');
+  if (!events || !events.length) {
+    el.innerHTML = '<div class="no-content">No events yet.</div>';
+    return;
+  }
+  let html = '<div class="table-card"><table style="width:100%">'
+    + '<thead><tr><th>Time</th><th>Camera</th><th>Zone</th>'
+    + '<th>Type</th><th>State</th><th>Class</th></tr></thead>'
+    + '<tbody>';
+  for (const ev of [...events].reverse()) {
+    const stateBadge = ev.state === 'Begin'
+      ? '<span class="badge badge-green">BEGIN</span>'
+      : '<span class="badge badge-gray">END</span>';
+    html += `<tr>
+      <td class="td-mono" style="color:var(--muted)">${ev.ts}</td>
+      <td class="td-mono">${ev.camera}</td>
+      <td class="td-mono">${ev.zone}</td>
+      <td style="font-size:12px">${ev.type}</td>
+      <td>${stateBadge}</td>
+      <td style="font-size:12px;color:var(--muted)">${ev.cls || '—'}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ── Snap handler ──────────────────────────────────────────────────────────────
+
+function handleSnap(s) {
+  renderCameras(s.cameras);
+  renderEvents(s.events);
+  document.getElementById('m-lastupdate').textContent =
+    new Date(s.ts * 1000).toLocaleTimeString('en-GB', { hour12: false });
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+
+const es = new EventSource('/sse/flir');
+
+es.onmessage = e => {
+  const data = JSON.parse(e.data);
+  if (data.t === 'snap') handleSnap(data);
+
+  _tickFlip = !_tickFlip;
+  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+  document.getElementById('footer-time').textContent =
+    new Date().toLocaleTimeString('en-GB', { hour12: false });
+};
+
+es.onopen = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot live';
+  document.getElementById('conn-label').textContent   = 'LIVE';
+  document.getElementById('conn-status').textContent  = 'connected';
+};
+
+es.onerror = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot error';
+  document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+  document.getElementById('conn-status').textContent  = 'SSE disconnected';
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AGD — PCI Platform</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* agd.html page-specific — uses only existing design tokens */
+    .cards-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    .cards-row .metric-card { flex: 1; min-width: 130px; }
+    .metric-value.sm { font-size: 14px; }
+    .section-gap { margin-top: 20px; }
+
+    /* Per-unit block: custom header sitting above a table-card */
+    .unit-block { margin-bottom: 16px; }
+    .unit-hdr {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      font-family: var(--mono);
+    }
+    .unit-id   { font-weight: 700; font-size: 12px; }
+    .unit-addr { font-size: 11px; color: var(--muted); flex: 1; }
+    .unit-block .table-card { border-radius: 0 0 8px 8px; }
+
+    /* Zone detection indicator dot */
+    .det-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #d1d5db;
+      border: 1px solid #9ca3af;
+      transition: all .1s;
+    }
+    .det-dot.on {
+      background: var(--green);
+      border-color: #15803d;
+      box-shadow: 0 0 3px rgba(21,128,61,.4);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI PLATFORM</div>
+      <div class="logo-sub">AGD Detector Adapter</div>
+    </div>
+  </div>
+  <div class="conn-indicator">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span id="conn-label">CONNECTING</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+<nav class="sidebar">
+  <div class="nav-group-label">Navigation</div>
+  <a class="nav-item" href="/">
+    <div class="nav-item-dot"></div>&#8592; Dashboard
+  </a>
+  <div class="nav-group-label">Services</div>
+  <a class="nav-item active">
+    <div class="nav-item-dot"></div>AGD
+  </a>
+</nav>
+
+<main>
+
+  <!-- ── Metric cards ── -->
+  <div class="cards-row">
+    <div class="metric-card">
+      <div class="metric-label">Units</div>
+      <div class="metric-value" id="m-units">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total Zones</div>
+      <div class="metric-value" id="m-zones">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Faulted</div>
+      <div class="metric-value" id="m-faults">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Last Update</div>
+      <div class="metric-value sm" id="m-lastupdate">—</div>
+    </div>
+  </div>
+
+  <!-- ── Per-unit zone tables ── -->
+  <div id="units-container">
+    <div class="no-content">Waiting for data…</div>
+  </div>
+
+  <!-- ── Detection events ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Detection Events (last 20)</div>
+    <div id="events-log">
+      <div class="no-content">No events yet.</div>
+    </div>
+  </div>
+
+  <!-- ── Fault / reconnect log ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Fault &amp; Reconnect Events (this session)</div>
+    <div id="fault-log">
+      <div class="no-content">No faults since page load.</div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<footer>
+  <span class="footer-tick" id="tick">&#9670;</span>
+  <span id="footer-time">—</span>
+  <span id="conn-status">not connected</span>
+</footer>
+
+<script>
+let _faults   = [];
+let _tickFlip = false;
+
+// ── Render units ──────────────────────────────────────────────────────────────
+
+function renderUnits(units) {
+  const container = document.getElementById('units-container');
+  if (!units || !units.length) {
+    container.innerHTML = '<div class="no-content">No units configured.</div>';
+    return;
+  }
+
+  let totalZones = 0;
+  let faultCount = 0;
+  let html = '';
+
+  for (const unit of units) {
+    totalZones += unit.zones.length;
+    if (unit.faulted) faultCount++;
+
+    const faultBadge = unit.faulted
+      ? '<span class="badge badge-red">FAULT</span>'
+      : '<span class="badge badge-green">OK</span>';
+
+    // Discover class columns from first zone (all zones have same keys)
+    const classKeys = unit.zones.length
+      ? Object.keys(unit.zones[0]).filter(k => k !== 'id' && k !== 'detected')
+      : [];
+
+    let thCols = '<th>Zone</th><th style="text-align:center">Detected</th>';
+    for (const k of classKeys) {
+      thCols += `<th>${k.replace('has_', '')}</th>`;
+    }
+
+    let rows = '';
+    for (const z of unit.zones) {
+      let cells = `<td class="td-mono">${z.id}</td>`
+        + `<td style="text-align:center"><span class="det-dot${z.detected ? ' on' : ''}"></span></td>`;
+      for (const k of classKeys) {
+        cells += z[k]
+          ? `<td><span class="badge badge-green" style="font-size:10px">YES</span></td>`
+          : `<td style="color:var(--muted)">—</td>`;
+      }
+      rows += `<tr>${cells}</tr>`;
+    }
+
+    html += `
+<div class="unit-block">
+  <div class="unit-hdr">
+    <span class="unit-id">${unit.id}</span>
+    <span class="unit-addr">${unit.ip}:${unit.port}</span>
+    ${faultBadge}
+  </div>
+  <div class="table-card">
+    <table style="width:100%">
+      <thead><tr>${thCols}</tr></thead>
+      <tbody>${rows || '<tr><td colspan="99" style="text-align:center;color:var(--muted)">No zones</td></tr>'}</tbody>
+    </table>
+  </div>
+</div>`;
+  }
+
+  container.innerHTML = html;
+
+  document.getElementById('m-units').textContent = units.length;
+  document.getElementById('m-zones').textContent = totalZones;
+  const mf = document.getElementById('m-faults');
+  mf.textContent = faultCount;
+  mf.className   = 'metric-value' + (faultCount > 0 ? ' err' : ' ok');
+}
+
+// ── Render events ─────────────────────────────────────────────────────────────
+
+function renderEvents(events) {
+  const el = document.getElementById('events-log');
+  if (!events || !events.length) {
+    el.innerHTML = '<div class="no-content">No events yet.</div>';
+    return;
+  }
+  let html = '<div class="table-card"><table style="width:100%">'
+    + '<thead><tr><th>Time</th><th>Unit</th><th>Zone</th><th>State</th><th>Classes</th></tr></thead>'
+    + '<tbody>';
+  for (const ev of [...events].reverse()) {
+    const state = ev.detected
+      ? '<span class="badge badge-green">DETECTED</span>'
+      : '<span class="badge badge-gray">CLEAR</span>';
+    html += `<tr>
+      <td class="td-mono" style="color:var(--muted)">${ev.ts}</td>
+      <td class="td-mono">${ev.unit}</td>
+      <td class="td-mono">${ev.zone}</td>
+      <td>${state}</td>
+      <td style="font-size:12px">${ev.classes}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ── Render fault log ──────────────────────────────────────────────────────────
+
+function renderFaults() {
+  const el = document.getElementById('fault-log');
+  if (!_faults.length) {
+    el.innerHTML = '<div class="no-content">No faults since page load.</div>';
+    return;
+  }
+  let html = '<div class="table-card"><table style="width:100%">'
+    + '<thead><tr><th>Time</th><th>Unit</th><th>Event</th><th>Detail</th></tr></thead>'
+    + '<tbody>';
+  for (const f of _faults) {
+    const evBadge = f.type === 'fault'
+      ? '<span class="badge badge-red">FAULT</span>'
+      : '<span class="badge badge-green">RECONNECT</span>';
+    html += `<tr>
+      <td class="td-mono" style="color:var(--muted)">${f.ts}</td>
+      <td class="td-mono">${f.unit}</td>
+      <td>${evBadge}</td>
+      <td style="font-size:12px;color:var(--muted)">${f.msg}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ── Snap handler ──────────────────────────────────────────────────────────────
+
+function handleSnap(s) {
+  renderUnits(s.units);
+  renderEvents(s.events);
+  document.getElementById('m-lastupdate').textContent =
+    new Date(s.ts * 1000).toLocaleTimeString('en-GB', { hour12: false });
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+
+const es = new EventSource('/sse/agd');
+
+es.onmessage = e => {
+  const data = JSON.parse(e.data);
+
+  if (data.t === 'snap') {
+    handleSnap(data);
+  } else if (data.t === 'fault') {
+    const ts = new Date(data.ts * 1000).toLocaleTimeString('en-GB', { hour12: false });
+    _faults.unshift({ ts, type: 'fault', unit: data.unit, msg: data.msg || '' });
+    if (_faults.length > 30) _faults.length = 30;
+    renderFaults();
+  } else if (data.t === 'reconnect') {
+    const ts = new Date(data.ts * 1000).toLocaleTimeString('en-GB', { hour12: false });
+    _faults.unshift({ ts, type: 'reconnect', unit: data.unit, msg: '' });
+    if (_faults.length > 30) _faults.length = 30;
+    renderFaults();
+  }
+
+  _tickFlip = !_tickFlip;
+  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+  document.getElementById('footer-time').textContent =
+    new Date().toLocaleTimeString('en-GB', { hour12: false });
+};
+
+es.onopen = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot live';
+  document.getElementById('conn-label').textContent   = 'LIVE';
+  document.getElementById('conn-status').textContent  = 'connected';
+};
+
+es.onerror = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot error';
+  document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+  document.getElementById('conn-status').textContent  = 'SSE disconnected';
+};
+</script>
+</body>
+</html>

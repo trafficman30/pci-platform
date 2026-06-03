@@ -101,5 +101,13 @@ def create_app(registry, ug405_client=None, rtig_client=None,
         async def offline_page():
             return FileResponse(os.path.join(_STATIC, "offline.html"))
 
+        @app.get("/agd", include_in_schema=False)
+        async def agd_page():
+            return FileResponse(os.path.join(_STATIC, "agd.html"))
+
+        @app.get("/flir", include_in_schema=False)
+        async def flir_page():
+            return FileResponse(os.path.join(_STATIC, "flir.html"))
+
     log.info("FastAPI app created  streams=%s", registry.all_ids())
     return app
