@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOVA Messages</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* height:100vh required — flex scroll layout
+       breaks with pci.css min-height:100vh */
+    body { height: 100vh; }
+
+    /* popup header override — revisit if page embedded in main dashboard */
+    .logo-mark { width: 24px; height: 24px; }
+    .logo-text { font-size: 14px; letter-spacing: 0; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .conn-label { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.55); }
+
+    .toolbar {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .toolbar-title { font-weight: 600; font-size: 13px; }
+    .toolbar-sep { flex: 1; }
+
+    /* tighter padding for toolbar context */
+    .btn { padding: 4px 12px; }
+    .btn:hover { background: var(--bg3); border-color: #9ca3af; }
+    .btn.danger:hover { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+
+    .filter-bar {
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 16px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .filter-btn {
+      font-family: var(--mono); font-size: 10px; font-weight: 600;
+      padding: 2px 8px; border-radius: 3px; border: 1px solid var(--border);
+      background: var(--bg2); color: var(--muted); cursor: pointer; transition: all .12s;
+    }
+    .filter-btn.active          { background: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+    .filter-btn.f5.active       { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+    .filter-btn.f6.active       { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+
+    #log {
+      flex: 1;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .msg-row {
+      display: flex;
+      gap: 12px;
+      padding: 4px 16px;
+      border-bottom: 1px solid var(--border);
+      align-items: baseline;
+      transition: background .1s;
+    }
+    .msg-row:hover  { background: var(--bg3); }
+    .msg-row.hidden { display: none; }
+
+    .msg-seq  { color: var(--muted); width: 36px; text-align: right; flex-shrink: 0; font-size: 10px; }
+    .msg-time { color: var(--muted); width: 90px; flex-shrink: 0; font-size: 10px; }
+    .msg-desc { flex: 1; }
+    .msg-raw  { color: var(--muted); font-size: 10px; flex-shrink: 0; display: none; }
+
+    .msg-row.t1 .msg-desc { color: var(--green); }
+    .msg-row.t5 .msg-desc { color: var(--accent2); font-weight: 600; }
+    .msg-row.t6 .msg-desc { color: var(--amber); }
+
+    .empty-state {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; color: var(--muted); font-family: var(--mono); font-size: 12px;
+    }
+
+    #scroll-anchor { height: 1px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <span class="logo-text">MOVA Messages</span>
+  </div>
+  <div class="header-right">
+    <div class="conn-dot" id="dot"></div>
+    <span class="conn-label" id="conn-label">connecting…</span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <span class="toolbar-title" id="title">Stream —</span>
+  <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">
+    <input type="checkbox" id="auto-scroll" checked> Auto-scroll
+  </label>
+  <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)">
+    <input type="checkbox" id="show-raw"> Raw fields
+  </label>
+  <div class="toolbar-sep"></div>
+  <button class="btn danger" onclick="clearLog()">Clear</button>
+</div>
+
+<div class="filter-bar">
+  <span style="font-size:10px;color:var(--muted);line-height:22px">Filter:</span>
+  <button class="filter-btn active"    data-type="all" onclick="setFilter(this)">ALL</button>
+  <button class="filter-btn active f1" data-type="1"   onclick="setFilter(this)">1 Stage start</button>
+  <button class="filter-btn active f2" data-type="2"   onclick="setFilter(this)">2 Var min</button>
+  <button class="filter-btn active f3" data-type="3"   onclick="setFilter(this)">3 Endsat</button>
+  <button class="filter-btn active f4" data-type="4"   onclick="setFilter(this)">4 Optimiser</button>
+  <button class="filter-btn active f5" data-type="5"   onclick="setFilter(this)">5 Stage change</button>
+  <button class="filter-btn active f6" data-type="6"   onclick="setFilter(this)">6 Intergreen</button>
+</div>
+
+<div id="log">
+  <div class="empty-state" id="empty">No messages yet — waiting for kernel activity…</div>
+  <div id="scroll-anchor"></div>
+</div>
+
+<script>
+  const params   = new URLSearchParams(location.search);
+  const streamId = parseInt(params.get('stream') || '0', 10);
+
+  document.getElementById('title').textContent = `Stream ${streamId + 1}`;
+  document.title = `MOVA Messages — Stream ${streamId + 1}`;
+
+  let ws = null;
+  let totalCount = 0;
+  let showRaw = false;
+  let activeFilters = new Set(['1','2','3','4','5','6']);
+
+  // ── WebSocket ──────────────────────────────────────────────────────────────
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws/messages/${streamId}`);
+
+    ws.onopen = () => {
+      setDot(true);
+    };
+
+    ws.onmessage = (ev) => {
+      const data = JSON.parse(ev.data);
+      if (data.messages && data.messages.length) {
+        data.messages.forEach(appendMsg);
+      }
+    };
+
+    ws.onclose = () => {
+      setDot(false);
+      setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => ws.close();
+  }
+
+  function setDot(live) {
+    const dot   = document.getElementById('dot');
+    const label = document.getElementById('conn-label');
+    dot.className    = 'conn-dot' + (live ? ' live' : ' error');
+    label.textContent = live ? `stream ${streamId}` : 'reconnecting…';
+  }
+
+  // ── Message rendering ──────────────────────────────────────────────────────
+
+  function appendMsg(m) {
+    const empty = document.getElementById('empty');
+    if (empty) empty.remove();
+
+    totalCount++;
+    const d    = new Date(m.ts * 1000);
+    const time = d.toLocaleTimeString('en-GB', { hour12: false }) + '.' +
+                 String(d.getMilliseconds()).padStart(3,'0');
+
+    const row = document.createElement('div');
+    row.className  = `msg-row t${m.type}` + (activeFilters.has(String(m.type)) ? '' : ' hidden');
+    row.dataset.type = m.type;
+
+    row.innerHTML = `
+      <span class="msg-seq">${m.seq}</span>
+      <span class="msg-time">${time}</span>
+      <span class="msg-desc">${escHtml(m.desc)}</span>
+      <span class="msg-raw" style="display:${showRaw?'block':'none'}">[${m.raw.slice(0,12).join(' ')}]</span>
+    `;
+
+    const anchor = document.getElementById('scroll-anchor');
+    anchor.parentNode.insertBefore(row, anchor);
+
+    if (document.getElementById('auto-scroll').checked) {
+      anchor.scrollIntoView({ block: 'end' });
+    }
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Controls ───────────────────────────────────────────────────────────────
+
+  function clearLog() {
+    const log = document.getElementById('log');
+    log.innerHTML = '<div class="empty-state" id="empty">Log cleared.</div><div id="scroll-anchor"></div>';
+    totalCount = 0;
+  }
+
+  document.getElementById('show-raw').onchange = function() {
+    showRaw = this.checked;
+    document.querySelectorAll('.msg-raw').forEach(el => {
+      el.style.display = showRaw ? 'block' : 'none';
+    });
+  };
+
+  function setFilter(btn) {
+    if (btn.dataset.type === 'all') {
+      const allOn = activeFilters.size === 6;
+      if (allOn) {
+        activeFilters.clear();
+        document.querySelectorAll('.filter-btn:not([data-type=all])').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      } else {
+        activeFilters = new Set(['1','2','3','4','5','6']);
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.add('active'));
+      }
+    } else {
+      const t = btn.dataset.type;
+      if (activeFilters.has(t)) { activeFilters.delete(t); btn.classList.remove('active'); }
+      else                       { activeFilters.add(t);    btn.classList.add('active');    }
+      document.querySelector('[data-type=all]').classList.toggle('active', activeFilters.size === 6);
+    }
+    document.querySelectorAll('.msg-row[data-type]').forEach(row => {
+      row.classList.toggle('hidden', !activeFilters.has(row.dataset.type));
+    });
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  connect();
+</script>
+</body>
+</html>
