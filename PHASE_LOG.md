@@ -569,3 +569,35 @@ Each now calls `from pci.shared.log import setup; setup('pci.xxx')`.
   Read each source file before porting. Never rewrite from memory.
 - Phase 7.4: Main dashboard templates/index.html
 - Phase 7.5: Service pages (ug405, rtig, autodim, offline, agd, flir)
+
+---
+
+## 2026-06-03 — Phase 7.3 in progress
+
+### Phase 7.3 — Port MOVA popup pages  ⧖ IN PROGRESS
+
+**Pages to port (order):**
+dataset.html, derived.html, messages.html, errors.html,
+history.html, analysis.html, satflow.html, tma.html, syslog.html
+
+**dataset.html — source read, plan confirmed, ready to write:**
+
+Source: /opt/MOVA/pci_mova/web/static/dataset.html (550 lines)
+
+CSS plan:
+- Drop from inline: :root, *, body — already in pci.css
+- Override inline: header — popup uses padding:10px 20px/gap:12px
+  vs pci.css height:48px; page-specific override required
+- Keep inline: .hdr-title, .hdr-sub, .tabs/.tab, .content, .section,
+  .section-title (different from pci.css: topbar colour + accent border),
+  .info-grid, .info-cell, table base styles, .plan-card, .sched-row,
+  .matrix-wrap, .upload-zone, .ds-* classes
+- toast() function: replace hand-rolled inline style.cssText with
+  pci.css .toast/.toast.success/.toast.error + #toast-container div
+
+API endpoints: no changes — const API = location.origin is correct,
+all /api/dataset/* and /api/streams/* paths unchanged.
+
+**Outstanding:**
+- Write web/static/dataset.html (next session, start here)
+- Then continue with remaining 8 popup pages
