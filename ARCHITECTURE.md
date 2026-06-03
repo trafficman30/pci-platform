@@ -963,7 +963,49 @@ is_dim = (now >= dim_utc) OR (now < bright_utc)
 7.5  Service pages — ug405, rtig, autodim, offline, agd, flir
 ```
 
-### Phase 8 — ARM64 field deployment
+### Phase 7.6 — MOVA Tools AML connection  ← GATE for Phase 8
+
+MOVA Tools must connect and display live data before ARM64 deployment begins.
+This is a functional gate, not a nice-to-have.
+
+**Background:**
+The `/opt/MOVA` implementation failed to connect MOVA Tools in testing.
+A tcpdump from a working Chameleon outstation is captured in:
+  `/opt/pci/MICKS_MOVA_TOOLS_INFO_FOR_AML/`
+
+**Root cause identified:**
+The `/opt/MOVA` AML server uses wrong framing and encoding:
+
+| | Working (tcpdump) | /opt/MOVA (broken) |
+|---|---|---|
+| Framing | 9-digit zero-padded decimal + JSON | STX(0x02) + decimal + ETX(0x03) + JSON |
+| Booleans | true / false | "T" / "F" |
+| Numbers | actual integers | decimal strings |
+
+**Before writing mova/protocol/aml_server.py:**
+1. Read `/opt/pci/MICKS_MOVA_TOOLS_INFO_FOR_AML/mova_text.txt` — full decoded
+   payload transcript from the working connection
+2. Read `/opt/MOVA/pci_mova/protocol/mova_tools.py` — understand what exists
+   and what is wrong
+3. Summarise findings and wait for confirmation before writing
+
+**What to build:**
+```
+7.6.1  mova/protocol/aml_server.py
+       TCP server on port 6000+N (per stream instance)
+       Wire framing: 9-digit zero-padded decimal length + compact JSON
+       Booleans: true/false  Numbers: actual JSON numbers
+       Handshake: ReqCheckConnectedToRightController → RspXxx (IsOk:true)
+       Polling: ReqMOVATime, ReqOperationFlags, ReqDetectorsStatus,
+                ReqLaneData(ID=1..N), ReqLinkData(ID=1..N),
+                ReqForceBits, ReqRawDetectorsStatus, ReqOutputChannelStatus
+       Reads live data from MovaStream kernel state
+       Runs on background thread inside kernel process (same as /opt/MOVA)
+7.6.2  Wire into kernel_main.py — start AML server on background thread
+7.6.3  Prove: MOVA Tools connects, handshake completes, live data visible
+```
+
+### Phase 8 — ARM64 field deployment  ← requires Phase 7.6 complete
 
 ```
 8.1  Debian ARM64 LXC on SER5
