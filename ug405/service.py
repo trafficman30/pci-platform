@@ -36,7 +36,7 @@ log = logging.getLogger('pci.ug405')
 
 COMMUNITY   = 'UTMC'
 LISTEN_IP   = '0.0.0.0'
-LISTEN_PORT = 161
+LISTEN_PORT = int(os.getenv('PCI_UG405_SNMP_PORT', '161'))
 
 VERSION_INFO = {
     'MIBVersion':    '1.0',

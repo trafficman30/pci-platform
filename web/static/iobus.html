@@ -274,38 +274,43 @@ function updateChangeRate() {
 
 setInterval(updateChangeRate, 1000);
 
-// ── SSE connection ────────────────────────────────────────────────────────────
+// ── WebSocket connection ──────────────────────────────────────────────────────
 
-const es = new EventSource('/sse/iobus');
+let ws;
+function connect() {
+  ws = new WebSocket('ws://' + location.host + '/ws/iobus');
 
-es.onmessage = e => {
-  const data = JSON.parse(e.data);
-  if (data.error) return;
+  ws.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.t === 'ping' || data.error) return;
 
-  const { name, value, ts, src } = data;
-  applySignalUpdate(name, value, src, ts);
+    const { name, value, ts, src } = data;
+    applySignalUpdate(name, value, src, ts);
 
-  changeTimes.push(Date.now());
-  document.getElementById('m-last').textContent = ts ? fmtTs(ts)
-    : new Date().toLocaleTimeString('en-GB', { hour12: false });
+    changeTimes.push(Date.now());
+    document.getElementById('m-last').textContent = ts ? fmtTs(ts)
+      : new Date().toLocaleTimeString('en-GB', { hour12: false });
 
-  _tickFlip = !_tickFlip;
-  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
-  document.getElementById('footer-time').textContent =
-    new Date().toLocaleTimeString('en-GB', { hour12: false });
-};
+    _tickFlip = !_tickFlip;
+    document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+    document.getElementById('footer-time').textContent =
+      new Date().toLocaleTimeString('en-GB', { hour12: false });
+  };
 
-es.onopen = () => {
-  document.getElementById('conn-dot').className    = 'conn-dot live';
-  document.getElementById('conn-label').textContent   = 'LIVE';
-  document.getElementById('conn-status').textContent  = 'connected';
-};
+  ws.onopen = () => {
+    document.getElementById('conn-dot').className    = 'conn-dot live';
+    document.getElementById('conn-label').textContent   = 'LIVE';
+    document.getElementById('conn-status').textContent  = 'connected';
+  };
 
-es.onerror = () => {
-  document.getElementById('conn-dot').className    = 'conn-dot error';
-  document.getElementById('conn-label').textContent   = 'DISCONNECTED';
-  document.getElementById('conn-status').textContent  = 'SSE disconnected';
-};
+  ws.onclose = () => {
+    document.getElementById('conn-dot').className    = 'conn-dot error';
+    document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+    document.getElementById('conn-status').textContent  = 'reconnecting…';
+    setTimeout(connect, 2000);
+  };
+}
+connect();
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 

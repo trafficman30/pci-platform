@@ -144,7 +144,7 @@ function scls(name) {
   return 'other';
 }
 
-// ── SSE per-stream ────────────────────────────────────────────────────────────
+// ── WebSocket per-stream ──────────────────────────────────────────────────────
 async function discoverStreams() {
   try {
     const j = await fetch('/api/mova/streams').then(r => r.json());
@@ -152,22 +152,23 @@ async function discoverStreams() {
     if (ids.length === 0) {
       ge('no-streams-msg', e => { e.style.display = ''; e.textContent = 'No streams configured. Start a MOVA kernel instance.'; });
     }
-    ids.forEach(id => { if (!_streams[id]) openStreamSSE(id); });
+    ids.forEach(id => { if (!_streams[id]) openStreamWS(id); });
   } catch(_) {
     ge('no-streams-msg', e => e.style.display = '');
   }
 }
 
-function openStreamSSE(id) {
+function openStreamWS(id) {
   addNavStream(id);
-  const es = new EventSource(`/sse/mova/${id}`);
-  _streams[id] = {es, live: false};
+  const ws = new WebSocket(`ws://${location.host}/ws/mova/${id}`);
+  _streams[id] = {ws, live: false};
 
-  es.onopen = () => setStreamNavState(id, 'connecting');
+  ws.onopen = () => setStreamNavState(id, 'connecting');
 
-  es.onmessage = (e) => {
+  ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
+      if (msg.t === 'ping') return;
       if (msg.t !== 'snap') return;
 
       ge('no-streams-msg', el => el.style.display = 'none');
@@ -188,12 +189,15 @@ function openStreamSSE(id) {
     } catch(_) {}
   };
 
-  es.onerror = () => {
+  ws.onclose = () => {
     if (_streams[id] && _streams[id].live) {
       _streams[id].live = false;
       updateConnIndicator();
     }
     setStreamNavState(id, 'error');
+    // reconnect — WebSocket survives tab switches; SSE does not
+    delete _streams[id];
+    setTimeout(() => openStreamWS(id), 2000);
   };
 }
 
@@ -803,6 +807,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   pollServices();
   setInterval(pollServices, 5000);
+
+  // Re-poll immediately when tab returns to foreground (fixes grey dots after tab switch)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') pollServices();
+  });
 });
 </script>
 </body>

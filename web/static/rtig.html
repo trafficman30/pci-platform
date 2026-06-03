@@ -181,29 +181,35 @@ function handleSnap(s) {
   renderRulesInfo(s.rules_count || 0, s.pulse_secs ?? '—');
 }
 
-const es = new EventSource('/sse/rtig');
+let ws;
+function connect() {
+  ws = new WebSocket('ws://' + location.host + '/ws/rtig');
 
-es.onmessage = e => {
-  const data = JSON.parse(e.data);
-  if (data.t === 'snap') handleSnap(data);
+  ws.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.t === 'ping') return;
+    if (data.t === 'snap') handleSnap(data);
 
-  _tickFlip = !_tickFlip;
-  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
-  document.getElementById('footer-time').textContent =
-    new Date().toLocaleTimeString('en-GB', { hour12: false });
-};
+    _tickFlip = !_tickFlip;
+    document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+    document.getElementById('footer-time').textContent =
+      new Date().toLocaleTimeString('en-GB', { hour12: false });
+  };
 
-es.onopen = () => {
-  document.getElementById('conn-dot').className    = 'conn-dot live';
-  document.getElementById('conn-label').textContent   = 'LIVE';
-  document.getElementById('conn-status').textContent  = 'connected';
-};
+  ws.onopen = () => {
+    document.getElementById('conn-dot').className    = 'conn-dot live';
+    document.getElementById('conn-label').textContent   = 'LIVE';
+    document.getElementById('conn-status').textContent  = 'connected';
+  };
 
-es.onerror = () => {
-  document.getElementById('conn-dot').className    = 'conn-dot error';
-  document.getElementById('conn-label').textContent   = 'DISCONNECTED';
-  document.getElementById('conn-status').textContent  = 'SSE disconnected';
-};
+  ws.onclose = () => {
+    document.getElementById('conn-dot').className    = 'conn-dot error';
+    document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+    document.getElementById('conn-status').textContent  = 'reconnecting…';
+    setTimeout(connect, 2000);
+  };
+}
+connect();
 
 // ── Reload rules ──────────────────────────────────────────────────────────────
 

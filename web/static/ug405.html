@@ -328,20 +328,28 @@ function handleMessage(data) {
     new Date().toLocaleTimeString('en-GB', {hour12:false});
 }
 
-// ── SSE connection ────────────────────────────────────────────────────────────
+// ── WebSocket connection ──────────────────────────────────────────────────────
 
-const es = new EventSource('/sse/ug405');
-es.onmessage = e => handleMessage(JSON.parse(e.data));
-es.onopen = () => {
-  document.getElementById('conn-dot').className   = 'conn-dot live';
-  document.getElementById('conn-label').textContent  = 'LIVE';
-  document.getElementById('conn-status').textContent = 'connected';
-};
-es.onerror = () => {
-  document.getElementById('conn-dot').className   = 'conn-dot error';
-  document.getElementById('conn-label').textContent  = 'DISCONNECTED';
-  document.getElementById('conn-status').textContent = 'SSE disconnected';
-};
+let ws;
+function connect() {
+  ws = new WebSocket('ws://' + location.host + '/ws/ug405');
+  ws.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.t !== 'ping') handleMessage(data);
+  };
+  ws.onopen = () => {
+    document.getElementById('conn-dot').className   = 'conn-dot live';
+    document.getElementById('conn-label').textContent  = 'LIVE';
+    document.getElementById('conn-status').textContent = 'connected';
+  };
+  ws.onclose = () => {
+    document.getElementById('conn-dot').className   = 'conn-dot error';
+    document.getElementById('conn-label').textContent  = 'DISCONNECTED';
+    document.getElementById('conn-status').textContent = 'reconnecting…';
+    setTimeout(connect, 2000);
+  };
+}
+connect();
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 

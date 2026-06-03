@@ -164,10 +164,11 @@ let _tickFlip    = false;
 
 // ── Time helpers ──────────────────────────────────────────────────────────────
 
-function fmtUtcHHMM(isoStr) {
+function fmtLocalHHMM(isoStr) {
   if (!isoStr) return '—';
+  // No timeZone override — uses browser local time (BST/GMT for UK engineers)
   return new Date(isoStr).toLocaleTimeString('en-GB', {
-    hour12: false, timeZone: 'UTC', hour: '2-digit', minute: '2-digit',
+    hour12: false, hour: '2-digit', minute: '2-digit',
   });
 }
 
@@ -195,8 +196,8 @@ function updateSchedule() {
   const dimTimeEl    = document.getElementById('dim-time');
   const dimCountEl   = document.getElementById('dim-count');
 
-  brightTimeEl.textContent = fmtUtcHHMM(_snap.bright_utc);
-  dimTimeEl.textContent    = fmtUtcHHMM(_snap.dim_utc);
+  brightTimeEl.textContent = fmtLocalHHMM(_snap.bright_utc);
+  dimTimeEl.textContent    = fmtLocalHHMM(_snap.dim_utc);
 
   // Reset next-event highlight
   brightTimeEl.className  = 'sched-time';
@@ -328,32 +329,38 @@ async function setEnabled(value) {
   }
 }
 
-// ── SSE ───────────────────────────────────────────────────────────────────────
+// ── WebSocket ────────────────────────────────────────────────────────────────
 
-const es = new EventSource('/sse/autodim');
+let ws;
+function connect() {
+  ws = new WebSocket('ws://' + location.host + '/ws/autodim');
 
-es.onmessage = e => {
-  const data = JSON.parse(e.data);
-  if (data.t === 'snap')       handleSnap(data);
-  if (data.t === 'transition') handleTransition(data);
+  ws.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.t === 'ping') return;
+    if (data.t === 'snap')       handleSnap(data);
+    if (data.t === 'transition') handleTransition(data);
 
-  _tickFlip = !_tickFlip;
-  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
-  document.getElementById('footer-time').textContent =
-    new Date().toLocaleTimeString('en-GB', { hour12: false });
-};
+    _tickFlip = !_tickFlip;
+    document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+    document.getElementById('footer-time').textContent =
+      new Date().toLocaleTimeString('en-GB', { hour12: false });
+  };
 
-es.onopen = () => {
-  document.getElementById('conn-dot').className    = 'conn-dot live';
-  document.getElementById('conn-label').textContent   = 'LIVE';
-  document.getElementById('conn-status').textContent  = 'connected';
-};
+  ws.onopen = () => {
+    document.getElementById('conn-dot').className    = 'conn-dot live';
+    document.getElementById('conn-label').textContent   = 'LIVE';
+    document.getElementById('conn-status').textContent  = 'connected';
+  };
 
-es.onerror = () => {
-  document.getElementById('conn-dot').className    = 'conn-dot error';
-  document.getElementById('conn-label').textContent   = 'DISCONNECTED';
-  document.getElementById('conn-status').textContent  = 'SSE disconnected';
-};
+  ws.onclose = () => {
+    document.getElementById('conn-dot').className    = 'conn-dot error';
+    document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+    document.getElementById('conn-status').textContent  = 'reconnecting…';
+    setTimeout(connect, 2000);
+  };
+}
+connect();
 </script>
 </body>
 </html>

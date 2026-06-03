@@ -9,16 +9,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from pci.web.api.routes.iobus   import router as iobus_router
-from pci.web.api.routes.system  import router as system_router
-from pci.web.api.routes.mova    import router as mova_router,    set_registry as mova_set_reg
+from pci.web.api.routes.iobus    import router as iobus_router
+from pci.web.api.routes.system   import router as system_router
+from pci.web.api.routes.mova     import router as mova_router,    set_registry as mova_set_reg
+from pci.web.api.routes.dataset  import router as dataset_router, set_registry as dataset_set_reg
 from pci.web.api.routes.ug405   import router as ug405_router,   set_client   as ug405_set_client
 from pci.web.api.routes.rtig    import router as rtig_router,    set_client   as rtig_set_client, create_receiver_app
 from pci.web.api.routes.autodim import router as autodim_router, set_client   as autodim_set_client
 from pci.web.api.routes.offline import router as offline_router, set_client   as offline_set_client
 from pci.web.api.routes.agd     import router as agd_router,     set_client   as agd_set_client
 from pci.web.api.routes.flir    import router as flir_router,    set_client   as flir_set_client
-from pci.web.api.ws.live        import (router as sse_router,    set_registry as sse_set_reg,
+from pci.web.api.ws.live        import (router as ws_router,     set_registry as sse_set_reg,
                                         set_ug405_client   as sse_set_ug405,
                                         set_rtig_client    as sse_set_rtig,
                                         set_autodim_client as sse_set_autodim,
@@ -36,6 +37,7 @@ def create_app(registry, ug405_client=None, rtig_client=None,
                agd_client=None, flir_client=None):
     mova_set_reg(registry)
     sse_set_reg(registry)
+    dataset_set_reg(registry)
     if ug405_client is not None:
         ug405_set_client(ug405_client)
         sse_set_ug405(ug405_client)
@@ -65,7 +67,8 @@ def create_app(registry, ug405_client=None, rtig_client=None,
         allow_headers     = ["*"],
     )
 
-    app.include_router(system_router,  prefix="/api/system",  tags=["System"])
+    app.include_router(system_router,  prefix="/api/system",   tags=["System"])
+    app.include_router(dataset_router, prefix="/api/dataset",  tags=["Dataset"])
     app.include_router(iobus_router,   prefix="/api/iobus",   tags=["IOBus"])
     app.include_router(mova_router,    prefix="/api/mova",    tags=["MOVA"])
     app.include_router(ug405_router,   prefix="/api/ug405",   tags=["UG405"])
@@ -74,7 +77,7 @@ def create_app(registry, ug405_client=None, rtig_client=None,
     app.include_router(offline_router, prefix="/api/offline", tags=["Offline"])
     app.include_router(agd_router,     prefix="/api/agd",     tags=["AGD"])
     app.include_router(flir_router,    prefix="/api/flir",    tags=["FLIR"])
-    app.include_router(sse_router,     prefix="/sse",         tags=["SSE"])
+    app.include_router(ws_router,      prefix="/ws",          tags=["WebSocket"])
 
     if os.path.isdir(_STATIC):
         _css_dir = os.path.join(_STATIC, "css")
@@ -85,6 +88,10 @@ def create_app(registry, ug405_client=None, rtig_client=None,
         @app.get("/", include_in_schema=False)
         async def index():
             return FileResponse(os.path.join(_STATIC, "index.html"))
+
+        @app.get("/dataset", include_in_schema=False)
+        async def dataset_page():
+            return FileResponse(os.path.join(_STATIC, "dataset.html"))
 
         @app.get("/ug405", include_in_schema=False)
         async def ug405_page():

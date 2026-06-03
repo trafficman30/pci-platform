@@ -1,0 +1,59 @@
+The Chameleon side ships the full C source of the predecessor library, MVComms, plus the shared message-format helpers that both ends use:
+
+File	What it is
+Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/MVComms/	The MVComms DLL — Windows project file (MVComms.vcxproj), MVCOMMS_EXPORTS/__declspec(dllexport) headers. Contents: TCPClient.c, TCPServer.c, TCPCommon.c, Serial.c, CommsErr.c, clicomms.c (the Fortran-callable wrapper used by the original MOVA Sim)
+Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/Messages.c / Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/Messages.h / Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/MsgTypes.h	The binary message-pack/unpack code. Header comment: "based on that used by Siemens for their enhanced ST800 serial link to MOVA (also used by MOVA Sim for communicating with Siemens Gemini units)". This is the byte layer SCCH would have wrapped.
+Chameleon-2-Repo-main/modules/MOVA/source/M6.0/source/pccontio.c, Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/pcuserio.c	PC-side adapters — open TCP or serial via MVComms, pump Message_Pack* / Message_Unpack* frames. The PC-side of the SCN/handset I/O
+Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/cradle/108MovaCradle.c#L62	Chameleon-side cradle — g_commsType = COMMS_TYPE_SERIAL. This is where MOVA-on-Chameleon receives detectors and emits forces.
+What's NOT in this repo
+The actual SCCH (SignalControllerCommHandler) DLL — i.e. the .NET / C# managed assembly that MOVA Tools Sim uses today. Three giveaways:
+
+Chameleon-2-Repo-main/modules/Web/configuration/htdocs/DataManagement.js#L40 refers to it as a sibling component: "In SimpleHTTPServer.cs have Process(HttpListenerContext context) ... in SignalControllerCommHandler have this receiving the message". .cs = C#, so SCCH is .NET, not native C.
+Chameleon-2-Repo-main/moduleTest/M8.0/AML/test_coverage#L8 treats SCCH as a known external codebase: "Functionality exists in SCCH but is not called".
+Chameleon-2-Repo-main/modules/Web/source/118mova.c#L804 — "not exposed in SCCH code".
+So SCCH is the modern managed-code rewrite/wrapper of MVComms, sitting on the MOVA Tools (Windows) side. The native C source ancestor of it is right here in MVComms/; the C# DLL itself ships from a different repository.
+
+The wire protocol SCCH speaks (the bit that pushes detection)
+From Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/MsgTypes.h:
+
+Plain Text
+
+length_lsb, length_msb,          (2 bytes)SOM=0x02, type, retaddr_lsb,     (3 bytes)retaddr_msb, count,              (2 bytes)payload...,checksum_lsb, checksum_msb       (2 bytes)
+Six message types (Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/MsgTypes.h#L24):
+
+ID	Name	Direction	Purpose
+0	PING	both	Keepalive
+1	UPDATE	both	Per-scan cycle (see below)
+2	HANDSHAKE	request/reply	{junctionID}
+3	INITIALISE	sim → MOVA	{date, time} — start-of-run
+4	EVENT	MOVA → sim	{type, id, description[256]} — log line
+5	TERMINATE	sim → MOVA	Stop
+The UPDATE message is what pushes detection. It's a paired exchange that runs every scan (Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/MsgTypes.h#L73):
+
+Sim → MOVA — MsgUpdateRequest:
+
+Plain Text
+
+{  MVByte controllerReady;                         // CRB  IOPort detectors[xg_DETECTOR_PORTS_MAX];        // ← Sim writes detector bits here  IOPort confirms[xg_CONFIRM_PORTS_MAX];          // stage/phase confirms}
+MOVA → Sim — MsgUpdateReply:
+
+Plain Text
+
+{  MVBool takeOver;  IOPort forces[xg_FORCE_PORTS_MAX];              // stage demands  IOPort isHoldSignalOn;  IOPort isReleaseSignalOn;  IOPort scOutputChannels[NumberofOutputChans];   // SR/PR}
+So MOVA Tools Sim plays the role of the signal controller (lamp/detector hardware) and the Chameleon plays the role of MOVA. Sim pushes detector port states each cycle, MOVA responds with force/hold/release outputs.
+
+Transport
+MVComms supports both TCP and RS232 serial, chosen at runtime (Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/MVComms/clicomms.c#L69). ClientComms_OpenTCP(ipEndPoint, ...) / ClientComms_OpenSerial(commPort, baud, ...) — the same Message_Pack* payloads go down either pipe.
+
+The Chameleon's normal in-field setup is COMMS_TYPE_SERIAL (SCN cable to the controller). For sim/lab use, MOVA Tools Sim opens a TCP socket to the Chameleon and substitutes itself for the controller.
+
+This is also why this protocol is completely separate from AML/55001: AML is a monitoring/configuration API for the operator UI; MVComms is the closed-loop I/O channel that runs MOVA's scan cycle. They don't share a port, framing, or state.
+
+How you'd rebuild SCCH if you needed to
+If the MOVA Tools / SCCH source isn't reachable, the recipe is:
+
+Wire layer: re-implement the framing in Chameleon-2-Repo-main/modules/MOVA/source/M8.0/source/Messages.c (length, SOM, type, retaddr, count, checksum) — every function you need is in this repo.
+Transport: pick TCP or serial. TCPClient.c/Serial.c are reference implementations you can mirror in C# (TcpClient / SerialPort are the .NET equivalents).
+Per-cycle loop: open → HANDSHAKE → INITIALISE → loop { send UPDATE-request with detectors; read UPDATE-reply forces } → TERMINATE.
+Match the IOPort sizes: xg_DETECTOR_PORTS_MAX, xg_CONFIRM_PORTS_MAX, xg_FORCE_PORTS_MAX, NumberofOutputChans are in kernel/defines.h and must agree with what the Chameleon expects, otherwise the checksum check passes but field offsets are wrong.
+The original SCCH is almost certainly a thin C# port of clicomms.c plus a C# struct mirror of MsgTypes.h. If you want, I can sketch a minimal C# MsgUpdateRequest / Encode / Decode matching the wire format here — say the word and I'll add it as a §9 to docs/mova-aml-api.md (or a separate docs/mova-scn-protocol.md, which is probably the cleaner home since it's a different protocol).

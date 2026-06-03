@@ -1121,3 +1121,145 @@ that port is occupied; service logs warn but continues.
 3. Change RTIG receiver port to 9011 in `config/platform.cfg`
 4. Investigate autodim BST issue in `autodim/service.py`
 5. Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+
+---
+
+## 2026-06-03 — Fix session: systemd, WebSocket, dataset router, partial config editors
+
+### Fix 1 — Systemd units + ports.cfg  ✓ COMPLETE
+
+**Port inventory at session start:**
+- TCP 8080: /opt/mova-env/bin/python -m pci_mova (pid 47375, /opt/MOVA monolith)
+- TCP 6000–6007: same pci_mova process (MOVA AML for 8 streams)
+- UDP 161: /opt/ug405-env/bin/python main.py (pid 46090, CM5 UG405)
+- TCP 8081, 8082, 9010, 9011, 6010+: all free
+
+**Port assignments:**
+- pci-web: 8082 (8080=MOVA, 8081=free but skipped)
+- pci-rtig HTTP: 9011 (9010 free but using 9011 per prior session note)
+- pci-mova AML: 6010+ (6000-6007 occupied by /opt/MOVA)
+- pci-ug405 SNMP: 1161 (161 occupied by CM5 ug405)
+
+**Built:**
+- `/opt/pci/config/ports.cfg` — reference file for all port assignments
+- `/opt/pci/ug405/service.py` line 39: `LISTEN_PORT = int(os.getenv('PCI_UG405_SNMP_PORT', '161'))` (one-line env var override, no logic change)
+- `/opt/pci/config/platform.cfg` [rtig] http_port = 9011 (was 9010)
+- `/etc/systemd/system/pci-iobus.service` — new
+- `/etc/systemd/system/pci-mova-kernel@.service` — updated (added PCI_MOVA_AML_BASE_PORT=6010)
+- `/etc/systemd/system/pci-ug405.service` — new (PCI_UG405_SNMP_PORT=1161)
+- `/etc/systemd/system/pci-rtig.service` — new
+- `/etc/systemd/system/pci-autodim.service` — new
+- `/etc/systemd/system/pci-offline.service` — new
+- `/etc/systemd/system/pci-web.service` — new (PCI_WEB_PORT=8082)
+
+**Test results — all 7 services active (running):**
+- pci-iobus, pci-mova-kernel@0, pci-ug405, pci-rtig, pci-autodim, pci-offline, pci-web: all active
+- curl http://localhost:8082/api/mova/streams → {"streams":[0]} ✓
+- pci-web TCP 8082 ✓, RTIG TCP 9011 ✓, pci-ug405 UDP 1161 ✓
+- All 7 enabled via systemctl enable.
+
+---
+
+### Fix 2 — SSE → WebSocket  ✓ COMPLETE
+
+**Root cause of tab-switch freeze:**
+SSE (EventSource) connections are throttled or closed by browsers in background tabs.
+WebSocket connections survive tab switches.
+
+**Server side — web/api/ws/live.py rewritten:**
+- All 8 SSE endpoints replaced with WebSocket endpoints
+- `@router.get(...)` → `@router.websocket(...)`
+- Shared `_pump()` helper: subscribe queue → loop → `await websocket.send_text()`
+- Keepalive: sends `{"t":"ping"}` every 2s idle (was SSE `: keepalive\n\n`)
+- `WebSocketDisconnect` and `asyncio.CancelledError` both handled for clean unsubscribe
+- Endpoints: `/ws/mova/{stream_id}`, `/ws/ug405`, `/ws/rtig`, `/ws/autodim`,
+  `/ws/offline`, `/ws/agd`, `/ws/flir`, `/ws/iobus`
+- app.py: router renamed from `sse_router` → `ws_router`, mounted at `/ws` (was `/sse`)
+
+**Client side — 8 HTML files updated:**
+- index.html: `openStreamSSE()` → `openStreamWS()`, `EventSource` → `WebSocket`,
+  `es.onerror` → `ws.onclose` + `setTimeout(openStreamWS, 2000)` reconnect,
+  `visibilitychange` listener added (re-polls services immediately on tab focus — fixes grey dots)
+- agd.html, autodim.html, flir.html, iobus.html, offline.html, rtig.html, ug405.html:
+  same SSE→WebSocket pattern, reconnect on close, filter `data.t === 'ping'` keepalives
+
+**Decisions:**
+- Popup pages (analysis, dataset, derived, errors, history, messages, satflow, tma, syslog)
+  already used `/ws/` paths from MOVA port — no changes needed
+- `design.html` matched grep but is doc-only — no changes needed
+
+---
+
+### Fix 3 — Dataset router  ✓ COMPLETE
+
+**Built:**
+- `/opt/pci/mova/datasets/` directory created
+- `web/api/routes/dataset.py` — 6 endpoints:
+  - `GET /api/dataset/` — list .mxds files: `[{name, size, mtime}]`
+  - `POST /api/dataset/upload` — multipart upload → save to datasets dir → `{ok, name}`
+  - `DELETE /api/dataset/{filename}` — delete → `{ok}` (path traversal rejected)
+  - `POST /api/dataset/{stream}/load` — IPC `LOAD /path/file.mxds` via run_in_executor → `{ok}`
+  - `GET /api/dataset/info/{name}` — stat → `{name, size, mtime, path}`
+  - `GET /api/dataset/detail/{stream}` — subscribe to push socket, await snap (3s timeout) → `{stream, dataset, active_plan, tod_plan, status}`
+- `python-multipart` installed and added to requirements.txt (required by FastAPI for UploadFile)
+- `web/api/app.py` updated: dataset router mounted at `/api/dataset`, `GET /dataset` → dataset.html
+
+**Decisions:**
+- `_ds_path(filename)` uses `os.path.basename()` to prevent path traversal — rejects any filename ≠ basename
+- `detail/{stream}` subscribes to push socket for one snap (max 3s) — avoids needing a SNAP command on kernel IPC
+
+---
+
+### Fix 4 — Config editors from CM5  PARTIAL — INTERRUPTED
+
+**What was read (CM5 source, all 4 editors fully analysed):**
+- `_parse_offline_plan_cfg()` / `_write_offline_plan_cfg()` — CM5 lines 4629–4734
+- `_parse_ug405_scns()` / `_write_ug405_scns()` — CM5 lines 4745–4869
+- `_parse_rtig_cfg()` / `_write_rtig_cfg()` / `api_rtig_rules_post()` — CM5 lines 4552–4626
+- `api_autodim_get()` / `api_autodim_post()` — CM5 lines 3860–3917
+
+**What was fixed along the way:**
+
+**Autodim timezone bug — FIXED:**
+- `_recalc()` uses `tzinfo=timezone.utc` so astral returns UTC datetimes
+- `snapshot()` sends `dim_utc`/`bright_utc` as UTC ISO strings
+- autodim.html `fmtUtcHHMM()` forced `timeZone: 'UTC'` on display — times showed as UTC, not BST
+- Fix: renamed to `fmtLocalHHMM()`, removed `timeZone: 'UTC'` override
+- Browser now displays times in its local timezone (BST/GMT for UK engineers) ✓
+
+**What was NOT written yet (interrupted before writing config editors):**
+- `web/api/routes/config.py` — all 4 editor backends (routes: /api/offline_plan_cfg, /api/ug405_scns, /api/rtig_cfg, /api/rtig_rules, /api/autodim_cfg)
+- HTML updates to offline.html, ug405.html, rtig.html, autodim.html (config editor sections)
+
+### Next session priorities (in order)
+
+1. Write `web/api/routes/config.py` — all 4 config editor backends:
+   - GET/POST /api/offline_plan_cfg → /opt/pci/config/offline_plan.json
+   - GET/POST /api/ug405_scns → /opt/pci/config/ug405.cfg (line-by-line parse, preserve header+LIVE sections)
+   - GET/POST /api/rtig_cfg → /opt/pci/config/rtig.cfg + rtig_rules.json
+   - POST /api/rtig_rules → rtig_rules.json + RELOAD_RULES IPC command
+   - GET/POST /api/autodim_cfg → /opt/pci/config/autodim.cfg
+   - POST autodim: write file only (no systemctl restart from web). UI note: "Location changes take effect on service restart"
+
+2. Mount config router in app.py at prefix="/api" (routes are root-level: /api/offline_plan_cfg etc)
+
+3. Update HTML service pages with config editor sections:
+   - offline.html: plan editor (timetable + per-SCN plans)
+   - ug405.html: SCN signal mapping editor
+   - rtig.html: signal map + rules JSON editor (RELOAD_RULES button)
+   - autodim.html: lat/lon/offset form + "Location changes take effect on service restart" note
+
+4. Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+   - Read MICKS_MOVA_TOOLS_INFO_FOR_AML/ tcpdumps
+   - Read /opt/MOVA/pci_mova/protocol/mova_tools.py
+   - Build mova/protocol/aml_server.py
+
+### State at session end
+- All 7 pci services running:
+  pci-iobus, pci-mova-kernel@0, pci-ug405 (UDP 1161), pci-rtig, pci-autodim, pci-offline, pci-web (TCP 8082)
+- Systemd units installed and enabled
+- WebSocket live on all service pages — tab switching no longer freezes UI
+- Dataset router live at /api/dataset/*
+- Autodim BST fix applied in autodim.html
+- Config editors NOT yet written (next session start here)
+
