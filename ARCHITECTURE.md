@@ -47,6 +47,14 @@ Key files to read before any MOVA work:
 - `pci_mova/protocol/aml_server.py` — MOVA Tools AML protocol
 - `pci_mova/api/app.py` — existing web layer (being split out)
 
+### `/opt/MC_MOVA` — DO NOT TOUCH
+
+The running CM5 monolith on this dev host. Not a reference codebase.
+Not part of the PCI platform build. Claude Code has no authorisation
+to read, edit, or execute anything under this path under any circumstances.
+
+---
+
 ### `/opt/CM5` — DO NOT EDIT
 
 The working CM5 monolith — UG405, RTIG, autodim, offline plans, IOBus server.
