@@ -1,63 +1,809 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>PCI MOVA — Phase 2 proof</title>
-<style>
-  body  { font-family: monospace; background: #1a1a1a; color: #ccc; padding: 16px; margin: 0; }
-  h1    { color: #fff; font-size: 1.1em; margin: 0 0 12px; }
-  h2    { color: #aaa; font-size: 0.9em; margin: 16px 0 6px; text-transform: uppercase; letter-spacing: 1px; }
-  #status { color: #0f0; font-size: 0.85em; margin-bottom: 8px; }
-  #snap { background: #111; color: #0cf; padding: 10px; overflow: auto;
-          max-height: 420px; font-size: 0.78em; white-space: pre; border: 1px solid #333; }
-  #events { background: #111; color: #fa0; padding: 10px; height: 160px;
-            overflow-y: scroll; font-size: 0.78em; border: 1px solid #333; }
-  #events p { margin: 0; padding: 2px 0; border-bottom: 1px solid #222; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCI Platform</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    .streams-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .content-block { margin-bottom: 20px; }
+    .btn:disabled  { opacity: .4; cursor: not-allowed; }
+  </style>
 </head>
 <body>
-<h1>PCI MOVA — Stream 0  (Phase 2 live proof)</h1>
-<div id="status">connecting…</div>
 
-<h2>Latest snapshot</h2>
-<pre id="snap"></pre>
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI PLATFORM</div>
+      <div class="logo-sub">RUNTIME v2.0</div>
+    </div>
+  </div>
+  <div class="conn-indicator">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span id="conn-label">CONNECTING</span>
+  </div>
+</header>
 
-<h2>Events (phase_change / fault / msg / stage_forced)</h2>
-<div id="events"></div>
+<div class="page-body">
+
+<!-- ── Sidebar ────────────────────────────────────────────────────────────── -->
+<nav class="sidebar">
+  <div class="nav-group-label">MOVA Streams</div>
+  <div id="nav-streams"></div>
+
+  <div class="nav-group-label">UTC / SCOOT</div>
+  <a class="nav-item" href="/ug405">
+    <div class="nav-item-dot" id="dot-ug405"></div>UG405
+  </a>
+
+  <div class="nav-group-label">IO</div>
+  <a class="nav-item" href="/iobus">
+    <div class="nav-item-dot" id="dot-iobus"></div>IOBus Signals
+  </a>
+
+  <div class="nav-group-label">Services</div>
+  <a class="nav-item" href="/rtig">
+    <div class="nav-item-dot" id="dot-rtig"></div>RTIG
+  </a>
+  <a class="nav-item" href="/autodim">
+    <div class="nav-item-dot" id="dot-autodim"></div>Autodim
+  </a>
+  <a class="nav-item" href="/offline">
+    <div class="nav-item-dot" id="dot-offline"></div>Offline Plans
+  </a>
+  <a class="nav-item" href="/agd">
+    <div class="nav-item-dot" id="dot-agd"></div>AGD
+  </a>
+  <a class="nav-item" href="/flir">
+    <div class="nav-item-dot" id="dot-flir"></div>FLIR
+  </a>
+
+  <div class="nav-group-label">Tools</div>
+  <a class="nav-item" href="#" onclick="event.preventDefault();openWin('/static/syslog.html','pci-syslog',1000,700)">
+    <div class="nav-item-dot"></div>System Log
+  </a>
+</nav>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<main>
+
+  <div class="content-block">
+    <div class="section-title">Active Streams</div>
+    <div class="streams-grid" id="streams-grid">
+      <div class="no-content" id="no-streams-msg">Connecting to runtime…</div>
+    </div>
+  </div>
+
+  <div class="panel content-block">
+    <div class="panel-header" onclick="toggleSysInfo()" style="cursor:pointer;user-select:none">
+      <span class="panel-title">
+        <span id="sysinfo-chevron" style="color:var(--muted);font-size:11px;margin-right:6px">▼</span>
+        System Information
+      </span>
+    </div>
+    <div id="sysinfo-body" class="panel-body">
+      <div class="licence-grid">
+        <div style="grid-column:1/-1;margin-bottom:8px">
+          <button style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px 0;font-size:11px;font-weight:600;font-family:var(--mono);color:var(--muted);cursor:pointer;letter-spacing:.04em;text-transform:uppercase"
+            onclick="event.stopPropagation();openWin('/static/syslog.html','pci-syslog',1000,700)">System Log</button>
+        </div>
+        <div><div class="licence-key">STATUS</div><div class="licence-val" id="lic-status">—</div></div>
+        <div><div class="licence-key">MAX STREAMS</div><div class="licence-val neutral" id="lic-streams">—</div></div>
+        <div><div class="licence-key">OWNER</div><div class="licence-val neutral" id="lic-owner">—</div></div>
+        <div><div class="licence-key">PROVIDER</div><div class="licence-val neutral" id="lic-provider">—</div></div>
+        <div><div class="licence-key">KERNEL</div><div class="licence-val neutral" id="lic-kver">—</div></div>
+        <div style="grid-column:1/-1">
+          <div class="licence-key">FINGERPRINT</div>
+          <div class="licence-val neutral" id="lic-fp" style="font-size:10px;word-break:break-all">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<footer>
+  <span>PCI PLATFORM</span><span>·</span>
+  <span class="footer-tick" id="footer-tick">●</span>
+  <span id="footer-time">—</span><span>·</span>
+  <span id="footer-streams">—</span><span>·</span>
+  <span id="footer-kver" style="opacity:.7">Kernel: —</span><span>·</span>
+  <div class="mem-bar-wrap">
+    <span>MEM</span>
+    <div class="mem-bar"><div class="mem-bar-fill" id="mem-fill" style="width:0%;background:var(--green)"></div></div>
+    <span id="mem-label">—</span>
+  </div>
+</footer>
+
+<div id="toast-container"></div>
 
 <script>
-const STREAM = 0;
-const snap   = document.getElementById('snap');
-const events = document.getElementById('events');
-const status = document.getElementById('status');
+const _streams  = {};   // id → {es, live}
+const _simState = {};   // id → {crb, stagon, stages, dets[], confirms[]}
+let   _tickFlip = false;
 
-const es = new EventSource('/sse/mova/' + STREAM);
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function ge(id, fn) { const e = document.getElementById(id); if (e) fn(e); }
 
-es.onopen = function() {
-    status.textContent = 'connected  stream ' + STREAM;
-    status.style.color = '#0f0';
-};
+function openWin(url, name, w, h) {
+  if (window.innerWidth < 900) { window.open(url, '_blank'); return; }
+  window.open(url, name, `width=${w},height=${h},resizable=yes,scrollbars=yes`);
+}
 
-es.onmessage = function(e) {
-    let data;
-    try { data = JSON.parse(e.data); } catch(_) { return; }
+function scls(name) {
+  const n = (name || '').toUpperCase();
+  if (n === 'ON_CONTROL')                                         return 'control';
+  if (n === 'WARMUP')                                             return 'warmup';
+  if (n === 'OFF' || n === 'NOT_STARTED')                         return 'off';
+  if (n === 'MULTI_CONFIRMS' || n === 'NO_CRB' || n === 'FAILED_RESTART') return 'fault';
+  if (n === 'NO_DATASET'     || n === 'NO_LICENCE')               return 'nodata';
+  return 'other';
+}
 
-    if (data.t === 'snap') {
-        snap.textContent = JSON.stringify(data, null, 2);
-    } else {
-        const p = document.createElement('p');
-        p.textContent = new Date().toISOString().slice(11, 23) + '  ' + JSON.stringify(data);
-        events.appendChild(p);
-        // keep last 200 events
-        while (events.children.length > 200) events.removeChild(events.firstChild);
-        events.scrollTop = events.scrollHeight;
+// ── SSE per-stream ────────────────────────────────────────────────────────────
+async function discoverStreams() {
+  try {
+    const j = await fetch('/api/mova/streams').then(r => r.json());
+    const ids = j.streams || [];
+    if (ids.length === 0) {
+      ge('no-streams-msg', e => { e.style.display = ''; e.textContent = 'No streams configured. Start a MOVA kernel instance.'; });
     }
-};
+    ids.forEach(id => { if (!_streams[id]) openStreamSSE(id); });
+  } catch(_) {
+    ge('no-streams-msg', e => e.style.display = '');
+  }
+}
 
-es.onerror = function() {
-    status.textContent = 'connection lost — retrying…';
-    status.style.color = '#f44';
-};
+function openStreamSSE(id) {
+  addNavStream(id);
+  const es = new EventSource(`/sse/mova/${id}`);
+  _streams[id] = {es, live: false};
+
+  es.onopen = () => setStreamNavState(id, 'connecting');
+
+  es.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.t !== 'snap') return;
+
+      ge('no-streams-msg', el => el.style.display = 'none');
+      const grid = document.getElementById('streams-grid');
+      let card = document.getElementById(`card-${id}`);
+      if (!card) { card = buildCard(id); grid.appendChild(card); }
+      updateCard(id, msg);
+
+      _tickFlip = !_tickFlip;
+      ge('footer-tick', el => el.style.opacity = _tickFlip ? '1' : '0.3');
+      ge('footer-time', el => el.textContent = new Date().toLocaleTimeString());
+
+      if (!_streams[id].live) {
+        _streams[id].live = true;
+        updateConnIndicator();
+      }
+      setStreamNavState(id, 'live');
+    } catch(_) {}
+  };
+
+  es.onerror = () => {
+    if (_streams[id] && _streams[id].live) {
+      _streams[id].live = false;
+      updateConnIndicator();
+    }
+    setStreamNavState(id, 'error');
+  };
+}
+
+function updateConnIndicator() {
+  const live = Object.values(_streams).some(s => s.live);
+  const liveCount = Object.values(_streams).filter(s => s.live).length;
+  const total     = Object.keys(_streams).length;
+  ge('conn-dot',      e => e.className = `conn-dot${live ? ' live' : ' error'}`);
+  ge('conn-label',    e => e.textContent = live ? 'LIVE' : 'DISCONNECTED');
+  ge('footer-streams',e => e.textContent = `${liveCount} / ${total} streams`);
+}
+
+// ── Sidebar nav ───────────────────────────────────────────────────────────────
+function addNavStream(id) {
+  const nav = document.getElementById('nav-streams');
+  if (!nav || document.getElementById(`nav-stream-${id}`)) return;
+  const a = document.createElement('a');
+  a.className = 'nav-item';
+  a.id = `nav-stream-${id}`;
+  a.href = `#card-${id}`;
+  a.innerHTML = `<div class="nav-item-dot" id="dot-stream-${id}"></div>Stream ${+id + 1}`;
+  nav.appendChild(a);
+}
+
+function setStreamNavState(id, state) {
+  const dot = document.getElementById(`dot-stream-${id}`);
+  if (!dot) return;
+  if      (state === 'live')       { dot.style.background = 'var(--live)';       dot.style.boxShadow = '0 0 4px rgba(0,230,118,.5)'; }
+  else if (state === 'error')      { dot.style.background = 'var(--error-dot)';  dot.style.boxShadow = ''; }
+  else                             { dot.style.background = 'rgba(255,255,255,.2)'; dot.style.boxShadow = ''; }
+}
+
+// ── Service status polling ────────────────────────────────────────────────────
+const _SVC_PINGS = [
+  {id:'ug405',   url:'/api/ug405/ping'},
+  {id:'rtig',    url:'/api/rtig/ping'},
+  {id:'autodim', url:'/api/autodim/ping'},
+  {id:'offline', url:'/api/offline/ping'},
+  {id:'agd',     url:'/api/agd/ping'},
+  {id:'flir',    url:'/api/flir/ping'},
+];
+
+async function pollServices() {
+  for (const svc of _SVC_PINGS) {
+    try {
+      const r = await fetch(svc.url, {signal: AbortSignal.timeout(2000)});
+      setServiceDot(svc.id, r.ok);
+    } catch { setServiceDot(svc.id, false); }
+  }
+}
+
+function setServiceDot(id, alive) {
+  const dot = document.getElementById(`dot-${id}`);
+  if (!dot) return;
+  dot.style.background  = alive ? 'var(--live)'           : 'rgba(255,255,255,.15)';
+  dot.style.boxShadow   = alive ? '0 0 4px rgba(0,230,118,.5)' : '';
+}
+
+// ── Build stream card DOM (called once per stream) ────────────────────────────
+function buildCard(id) {
+  const c = document.createElement('div');
+  c.className = 'stream-card';
+  c.id = `card-${id}`;
+  c.innerHTML = `
+    <div class="card-header" onclick="toggleCard(${id})">
+      <div style="display:flex;align-items:center;gap:4px">
+        <span class="card-chevron" id="chevron-${id}">▼</span>
+        <span class="card-title">STREAM ${+id + 1}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.5)">ACTIVE DATASET:&nbsp;<span id="ds-${id}" style="color:rgba(255,255,255,.85)">—</span></span>
+        <span class="status-badge off" id="badge-${id}">—</span>
+      </div>
+    </div>
+    <div class="card-body" id="cbody-${id}">
+
+    <div class="card-status-row">
+      <div class="status-cell">
+        <div class="status-label">CRB</div>
+        <div class="status-val off" id="crb-val-${id}"><div class="crb-light" id="crb-${id}"></div>NOT READY</div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">On Control</div>
+        <div class="status-val off" id="on-ctrl-${id}">NO</div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">MOVA Enabled</div>
+        <div class="status-val off" id="mova-en-${id}">NO</div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">Error Count</div>
+        <div class="status-val" id="err-cnt-${id}">0</div>
+      </div>
+      <div class="status-cell">
+        <div class="status-label">Warmup</div>
+        <div class="status-val off" id="warmup-${id}">—</div>
+      </div>
+    </div>
+
+    <div class="card-status-row" style="font-size:0.82em;flex-wrap:wrap">
+      <div class="status-cell"><div class="status-label" title="Prog Marker — kernel stage-machine state">PM</div><div class="status-val" id="kpm-${id}">—</div></div>
+      <div class="status-cell"><div class="status-label" title="Current Stage">CS</div><div class="status-val" id="kcs-${id}">—</div></div>
+      <div class="status-cell"><div class="status-label" title="Demanded Stage">DS</div><div class="status-val" id="kds-${id}">—</div></div>
+      <div class="status-cell"><div class="status-label" title="Next Stage">NS</div><div class="status-val" id="kns-${id}">—</div></div>
+      <div class="status-cell"><div class="status-label" title="Wait Stage Change Timer × 10">WaitT</div><div class="status-val" id="kwt-${id}">—</div></div>
+      <div class="status-cell"><div class="status-label" title="Kernel In Warmup">WU</div><div class="status-val" id="kwu-${id}">—</div></div>
+      <div class="status-cell"><div class="status-label" title="CI_start_scan count mod 128">SCAN</div><div class="status-val" id="kscan-${id}">—</div></div>
+      <div class="status-cell"><div class="status-label" title="Speed multiplier">SPEED</div><div class="status-val" id="kspeed-${id}">1x</div></div>
+      <div class="status-cell"><div class="status-label" title="Server time (kernel TOD)">TIME</div><div class="status-val" id="ktime-${id}" style="font-family:var(--mono)">—</div></div>
+      <div class="status-cell" style="flex:2"><div class="status-label" title="Server date">DATE</div><div class="status-val" id="kdate-${id}" style="font-family:var(--mono)">—</div></div>
+    </div>
+
+    <div class="card-section-hdr">Detectors / Channels Status</div>
+    <div class="card-section-body"><div class="bit-grid" id="dets-${id}"></div></div>
+
+    <div class="card-section-hdr">Confirm Bit Status</div>
+    <div class="card-section-body"><div class="bit-grid" id="confs-${id}"></div></div>
+
+    <div class="card-section-hdr">Force Bits Status</div>
+    <div class="card-section-body"><div class="bit-grid" id="forces-${id}"></div></div>
+
+    <div class="card-section-hdr">Special Outputs</div>
+    <div class="card-section-body">
+      <div class="bit-grid">
+        <div class="bit-group" id="special-${id}"></div>
+        <div class="bit-group" style="margin-left:16px;border-left:1px solid var(--border);padding-left:16px">
+          <div class="bit-cell"><div class="bit-num">HI</div><div class="bit-dot" id="hi-${id}"></div></div>
+          <div class="bit-cell"><div class="bit-num">SYNC</div><div class="bit-dot" id="sync-${id}"></div></div>
+          <div class="bit-cell"><div class="bit-num">FLT</div><div class="bit-dot" id="fault-${id}"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="faults-body" id="faults-${id}"></div>
+
+    <div class="sim-panel" id="sim-panel-${id}" style="display:none">
+      <div class="sim-panel-hdr" onclick="event.stopPropagation();toggleSimPanel(${id})">
+        <span class="sim-panel-title">▶ Input Simulation</span>
+        <span class="sim-note" id="sim-note-${id}"></span>
+      </div>
+      <div class="sim-panel-body" id="sim-body-${id}">
+        <div class="sim-row">
+          <span class="sim-row-label">CRB</span>
+          <button class="sim-btn" id="sim-crb-${id}" onclick="simSetCRB(${id})">OFF</button>
+          <span class="sim-note">Controller Ready Bit — must be ON for MOVA to leave warmup</span>
+        </div>
+        <div class="sim-row">
+          <span class="sim-row-label">Confirms</span>
+          <div id="sim-confs-${id}" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+        </div>
+        <div class="sim-row">
+          <span class="sim-row-label">Detectors</span>
+          <div class="sim-det-grid" id="sim-dets-${id}"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-controls-row">
+      <button class="btn btn-start" id="btn-start-${id}" onclick="startStream(${id})" disabled title="Load a dataset first">Start</button>
+      <button class="btn btn-stop"  onclick="stopStream(${id})">Stop</button>
+      <button class="btn btn-force" onclick="promptForce(${id})">Force</button>
+      <button class="btn"           onclick="resetStream(${id})">Reset</button>
+      <select id="speed-sel-${id}" onchange="setSpeed(${id},this.value)"
+        style="font-family:var(--mono);font-size:10px;padding:3px 6px;border:1px solid var(--border);border-radius:3px;background:var(--bg2);color:var(--text);cursor:pointer">
+        <option value="1">1x</option><option value="2">2x</option><option value="5">5x</option>
+      </select>
+      <select id="tod-sel-${id}" onchange="setTOD(${id},this.value)" title="TOD clock offset (test only)"
+        style="font-family:var(--mono);font-size:10px;padding:3px 6px;border:1px solid var(--border);border-radius:3px;background:var(--bg2);color:var(--text);cursor:pointer">
+        <option value="0">TOD +0h</option><option value="2">TOD +2h</option><option value="4">TOD +4h</option>
+        <option value="6">TOD +6h</option><option value="8">TOD +8h</option><option value="10">TOD +10h</option>
+        <option value="12">TOD +12h</option><option value="-2">TOD −2h</option>
+        <option value="-4">TOD −4h</option><option value="-6">TOD −6h</option>
+      </select>
+      <button class="btn btn-log" onclick="openWin('/static/dataset.html?stream=${id}', 'pci-ds-${id}',   1100,750)">Dataset</button>
+      <button class="btn btn-log" onclick="openWin('/static/derived.html?stream=${id}', 'pci-drv-${id}',  1000,800)">Derived</button>
+      <button class="btn btn-log" onclick="openWin('/static/messages.html?stream=${id}','pci-msg-${id}',   900,700)">Messages</button>
+      <button class="btn btn-log" onclick="openWin('/static/errors.html?stream=${id}',  'pci-err-${id}',   700,600)">Errors</button>
+      <button class="btn btn-log" onclick="openWin('/static/history.html?stream=${id}', 'pci-hist-${id}', 1200,900)">History</button>
+      <button class="btn btn-log" onclick="openWin('/static/analysis.html?stream=${id}','pci-ana-${id}',  1300,900)">Analysis</button>
+    </div>
+    </div>`;
+
+  try {
+    if (localStorage.getItem(`pci-card-${id}-collapsed`) === '1') {
+      c.classList.add('collapsed');
+      c.querySelector(`#chevron-${id}`).textContent = '▶';
+    }
+  } catch(_) {}
+
+  return c;
+}
+
+// ── Update card with live data ────────────────────────────────────────────────
+function updateCard(id, s) {
+  const card    = document.getElementById(`card-${id}`);
+  const status  = s.status  || {};
+  const buffers = s.buffers || {};
+  const io      = s.io      || {};
+  const sc      = scls(status.current);
+
+  if (card) {
+    card.className = `stream-card${sc==='fault'?' fault':sc==='warmup'?' warmup':sc==='control'?' active':''}${card.classList.contains('collapsed')?' collapsed':''}`;
+  }
+
+  ge(`badge-${id}`, e => { e.textContent = status.current || '—'; e.className = `status-badge ${sc}`; });
+
+  ge(`ds-${id}`, e => {
+    if (s.dataset) {
+      let planInfo = '';
+      if (s.active_plan > 0) planInfo += ` · Plan ${s.active_plan}`;
+      if (s.tod_plan > 0 && s.tod_plan !== s.active_plan) planInfo += ` (TOD:${s.tod_plan})`;
+      e.textContent = (s.dataset.title || s.dataset.filename || '—') + planInfo;
+    } else {
+      e.textContent = '—';
+    }
+  });
+
+  // Start button: enabled only when dataset is present
+  const startBtn = document.getElementById(`btn-start-${id}`);
+  if (startBtn) {
+    startBtn.disabled = !s.dataset;
+    startBtn.title    = s.dataset ? 'Enable On Control' : 'Load a dataset first';
+  }
+
+  // Status row 1
+  const crb = !!buffers.crb;
+  ge(`crb-${id}`,     e => e.className = `crb-light${crb ? ' on' : ''}`);
+  ge(`crb-val-${id}`, e => { e.lastChild.textContent = crb ? 'READY' : 'NOT READY'; e.className = `status-val ${crb ? 'on' : 'off'}`; });
+
+  const onCtrl = ((buffers.io) || [])[19] | 0;
+  ge(`on-ctrl-${id}`, e => {
+    e.textContent = onCtrl ? 'YES' : 'NO';
+    e.className   = `status-val toggle-btn ${onCtrl ? 'on' : 'off'}`;
+    e.onclick     = () => setIoFlag(id, 19, onCtrl ? 0 : 1);
+  });
+
+  const movaOn = ((buffers.io) || [])[27] | 0;
+  ge(`mova-en-${id}`, e => {
+    e.textContent = movaOn ? 'YES' : 'NO';
+    e.className   = `status-val toggle-btn ${movaOn ? 'on' : 'off'}`;
+    e.onclick     = () => setIoFlag(id, 27, movaOn ? 0 : 1);
+  });
+
+  const errCnt = ((buffers.io) || [])[16] | 0;
+  ge(`err-cnt-${id}`, e => { e.textContent = errCnt; e.className = `status-val${errCnt > 0 ? ' warn' : ''}`; });
+
+  ge(`warmup-${id}`, e => {
+    const cur    = status.current;
+    const wc     = buffers.warmup_counter ?? -1;
+    const stages = s.dataset ? (s.dataset.stages || 0) : 0;
+    if (cur === 'WARMUP')      { e.textContent = `${wc} / ${stages}`; e.className = 'status-val warn'; }
+    else if (cur === 'ON_CONTROL') { e.textContent = 'COMPLETE'; e.className = 'status-val on'; }
+    else                           { e.textContent = '—';         e.className = 'status-val off'; }
+  });
+
+  // Status row 2 — kernel diagnostics
+  const PM_LABELS = {0:'CONT_IG',1:'START_IG',2:'ABS_MIN',3:'VAR_MIN',4:'CHK_ENDSAT',5:'DELAY_STOPS',7:'MAX_GREEN!',8:'WAIT_CHG'};
+  try {
+    const pmv    = buffers.prog_marker             != null ? buffers.prog_marker              : null;
+    const kcsv   = buffers.kernel_current_stage    != null ? buffers.kernel_current_stage     : '?';
+    const kdsv   = buffers.kernel_demanded_stage   != null ? buffers.kernel_demanded_stage    : '?';
+    const knsv   = buffers.kernel_next_stage       != null ? buffers.kernel_next_stage        : '?';
+    const kwtv   = buffers.wait_stage_change_timer != null ? buffers.wait_stage_change_timer  : null;
+    const kwuv   = buffers.kernel_in_warmup        != null ? buffers.kernel_in_warmup         : null;
+    const kscanv = ((buffers.io) || [])[63] | 0;
+    const pmLabel = pmv !== null ? (PM_LABELS[pmv] || String(pmv)) : '?';
+    ge(`kpm-${id}`,   e => { e.textContent = pmLabel; e.className = `status-val${pmv===7||pmv===8?' warn':''}`; });
+    ge(`kcs-${id}`,   e => { e.textContent = kcsv; });
+    ge(`kds-${id}`,   e => { e.textContent = kdsv; e.className = `status-val${kdsv!==knsv?' warn':''}`; });
+    ge(`kns-${id}`,   e => { e.textContent = knsv; });
+    ge(`kwt-${id}`,   e => { e.textContent = kwtv!==null?(kwtv/10).toFixed(1)+'s':'?'; e.className=`status-val${kwtv>0?' on':''}`; });
+    ge(`kwu-${id}`,   e => { e.textContent = kwuv!==null?(kwuv?'YES':'NO'):'?'; e.className=`status-val${kwuv?' warn':' on'}`; });
+    ge(`kscan-${id}`, e => { e.textContent = kscanv; });
+    const spd = s.speed || 1;
+    ge(`kspeed-${id}`,e => { e.textContent = spd + 'x'; e.className = `status-val${spd>1?' warn':''}`; });
+    const sel = document.getElementById(`speed-sel-${id}`);
+    if (sel && sel.value !== String(spd)) sel.value = String(spd);
+    const toff = s.time_offset_hours || 0;
+    const todSel = document.getElementById(`tod-sel-${id}`);
+    if (todSel && todSel.value !== String(toff)) todSel.value = String(toff);
+    ge(`ktime-${id}`, e => { e.textContent = s.server_time || '—'; e.style.color = toff!==0?'var(--amber)':''; });
+    ge(`kdate-${id}`, e => { e.textContent = s.server_date || '—'; e.style.color = toff!==0?'var(--amber)':''; });
+  } catch(err) { console.warn('diag update err', err); }
+
+  // Kernel version in footer + system info panel
+  const kver = s.kernel_version;
+  if (kver && !kver.includes('sim')) {
+    ge('footer-kver', e => { e.textContent = `Kernel: ${kver}`; });
+    ge('lic-kver',    e => { e.textContent = kver; });
+  }
+
+  // Bit grids
+  updateBitGrid(`dets-${id}`,   buffers.kernel_deton || buffers.detectors || [], 4);
+  updateDetTooltips(`dets-${id}`, s.detector_meta || []);
+  updateBitGrid(`confs-${id}`,  buffers.confirms || [], 4);
+  updateForceBits(`forces-${id}`, buffers.forces || [], io.to || 0);
+  updateSpecialOutputs(`special-${id}`, buffers.special_outputs || []);
+  updateIndicator(`hi-${id}`,    io.hi         || 0, 'hi-on');
+  updateIndicator(`sync-${id}`,  io.sync       || 0, 'sync-on');
+  updateIndicator(`fault-${id}`, io.mova_fault || 0, 'fault-on');
+
+  // Active faults list
+  ge(`faults-${id}`, e => {
+    e.innerHTML = '';
+    (s.active_faults || []).forEach(f => {
+      const d = document.createElement('div'); d.className = 'fault-item';
+      d.textContent = `⚠ ${f.label}`; e.appendChild(d);
+    });
+  });
+
+  // Simulation panel (shown when kernel reports simulated IO mode)
+  updateSimPanel(id, s);
+}
+
+// ── Bit grid helpers ──────────────────────────────────────────────────────────
+function updateBitGrid(id, values, groupSize) {
+  const c = document.getElementById(id); if (!c) return;
+  if (!c.children.length) {
+    for (let g = 0; g * groupSize < values.length; g++) {
+      const grp = document.createElement('div'); grp.className = 'bit-group';
+      for (let i = g*groupSize; i < Math.min((g+1)*groupSize, values.length); i++) {
+        const cell = document.createElement('div'); cell.className = 'bit-cell';
+        const num  = document.createElement('div'); num.className  = 'bit-num'; num.textContent = String(i+1).padStart(2,'0');
+        const dot  = document.createElement('div'); dot.className  = `bit-dot${values[i]?' on':''}`;
+        cell.appendChild(num); cell.appendChild(dot); grp.appendChild(cell);
+      }
+      c.appendChild(grp);
+    }
+  } else {
+    c.querySelectorAll('.bit-dot').forEach((dot, i) => { dot.className = `bit-dot${values[i]?' on':''}`; });
+  }
+}
+
+function updateDetTooltips(gridId, detMeta) {
+  const c = document.getElementById(gridId); if (!c) return;
+  const typeMap = {X:'Loop',IN:'Inductive',Stopline:'Stopline',XSINK:'Loop (sink)',
+                   Pedestrian:'Pedestrian','Simple Traffic':'Simple Traffic',V:'Video',M:'Manual'};
+  c.querySelectorAll('.bit-cell').forEach((cell, i) => {
+    const detNum = i + 1;
+    const meta   = detMeta.find(m => m.id === detNum);
+    if (meta) {
+      const parts = [`Det ${detNum}`, `Type: ${meta.type} — ${typeMap[meta.type]||meta.type||'?'}`];
+      if (meta.link != null) parts.push(`Link: ${meta.link}`);
+      if (meta.lane != null) parts.push(`Lane: ${meta.lane}`);
+      if (meta.dist != null && meta.dist < 999990) parts.push(`Dist: ${meta.dist.toFixed(1)}m from stopline`);
+      cell.title = parts.join('  |  ');
+    } else {
+      cell.title = `Detector ${detNum}`;
+    }
+  });
+}
+
+function updateForceBits(id, forces, to) {
+  const c = document.getElementById(id); if (!c) return;
+  if (!c.children.length) {
+    let grp;
+    forces.forEach((v, i) => {
+      if (i % 4 === 0) { grp = document.createElement('div'); grp.className='bit-group'; c.appendChild(grp); }
+      const cell = document.createElement('div'); cell.className='bit-cell';
+      const num  = document.createElement('div'); num.className='bit-num'; num.textContent=String(i+1).padStart(2,'0');
+      const dot  = document.createElement('div'); dot.className=`bit-dot${v?' on':''}`;
+      cell.appendChild(num); cell.appendChild(dot); grp.appendChild(cell);
+    });
+    const toGrp  = document.createElement('div'); toGrp.className='bit-group'; toGrp.style.marginLeft='10px';
+    const toCell = document.createElement('div'); toCell.className='bit-cell';
+    const toNum  = document.createElement('div'); toNum.className='bit-num'; toNum.textContent='TO';
+    const toDot  = document.createElement('div'); toDot.className=`bit-dot${to?' amber':''}`;
+    toCell.appendChild(toNum); toCell.appendChild(toDot); toGrp.appendChild(toCell); c.appendChild(toGrp);
+  } else {
+    const dots = c.querySelectorAll('.bit-dot');
+    forces.forEach((v, i) => { if(dots[i]) dots[i].className=`bit-dot${v?' on':''}`; });
+    if (dots[forces.length]) dots[forces.length].className=`bit-dot${to?' amber':''}`;
+  }
+}
+
+function updateSpecialOutputs(id, values) {
+  const c = document.getElementById(id); if (!c) return;
+  if (!c.children.length) {
+    for (let i = 0; i < 8; i++) {
+      const cell = document.createElement('div'); cell.className='bit-cell';
+      const num  = document.createElement('div'); num.className='bit-num'; num.textContent=String(i+1).padStart(2,'0');
+      const dot  = document.createElement('div'); dot.className=`bit-dot${(values[i]||0)?' on':''}`;
+      cell.appendChild(num); cell.appendChild(dot); c.appendChild(cell);
+    }
+  } else {
+    c.querySelectorAll('.bit-dot').forEach((dot,i) => dot.className=`bit-dot${(values[i]||0)?' on':''}`);
+  }
+}
+
+function updateIndicator(id, value, onClass) {
+  ge(id, e => e.className = `bit-dot${value ? ' '+onClass : ''}`);
+}
+
+// ── Input simulation panel ────────────────────────────────────────────────────
+function updateSimPanel(id, s) {
+  const io = s.io || {};
+  const panel = document.getElementById(`sim-panel-${id}`);
+  if (!panel) return;
+
+  if (!s.simulated_io) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+
+  const buffers = s.buffers || {};
+  const dataset = s.dataset || {};
+  const stages  = Math.min(dataset.stages || 0, 31);
+  const stagon  = dataset.stagon || 0;
+  const confirms = io.confirms || [];
+  const dets     = (buffers.kernel_deton) ? buffers.kernel_deton : (io.detectors || []);
+  const crb      = !!io.crb;
+
+  _simState[id] = { crb, stagon, stages, dets: [...(io.detectors||[])], confirms: [...confirms] };
+
+  ge(`sim-note-${id}`, e => { e.textContent = stages ? `${stages} stage${stages>1?'s':''}, stagon=${stagon} (${stagon?'Closed':'Open'})` : 'No dataset'; });
+  ge(`sim-crb-${id}`,  e => { e.textContent = crb ? 'ON' : 'OFF'; e.className = `sim-btn${crb ? ' crb-active' : ''}`; });
+
+  const confsEl = document.getElementById(`sim-confs-${id}`);
+  if (confsEl) {
+    if (confsEl.children.length !== stages) {
+      confsEl.innerHTML = '';
+      for (let sg = 1; sg <= stages; sg++) {
+        const b = document.createElement('button');
+        b.className = 'sim-btn'; b.dataset.stage = String(sg);
+        b.textContent = `Stg ${sg}`; b.title = `Toggle stage ${sg} confirm`;
+        b.onclick = () => simToggleConfirm(id, sg);
+        confsEl.appendChild(b);
+      }
+    }
+    Array.from(confsEl.children).forEach(b => {
+      const sg = parseInt(b.dataset.stage, 10);
+      b.className = `sim-btn${(confirms[sg-1]|0)===stagon?' active':''}`;
+    });
+  }
+
+  const detsEl = document.getElementById(`sim-dets-${id}`);
+  if (detsEl && detsEl.children.length !== 64) {
+    detsEl.innerHTML = '';
+    for (let d = 1; d <= 64; d++) {
+      const b = document.createElement('button');
+      b.className = 'sim-det-btn'; b.id = `sim-det-${id}-${d}`;
+      b.textContent = d; b.title = `Detector ${d}`;
+      b.onclick = () => simToggleDet(id, d);
+      detsEl.appendChild(b);
+    }
+  }
+  for (let d = 1; d <= 64; d++) {
+    const b = document.getElementById(`sim-det-${id}-${d}`);
+    if (b) b.className = `sim-det-btn${(dets[d-1]||0)?' active':''}`;
+  }
+}
+
+function toggleSimPanel(id) {
+  const body = document.getElementById(`sim-body-${id}`);
+  if (body) body.classList.toggle('open');
+  const hdr = document.querySelector(`#sim-panel-${id} .sim-panel-title`);
+  if (hdr) hdr.textContent = (body && body.classList.contains('open') ? '▼' : '▶') + ' Input Simulation';
+}
+
+// ── Simulation IO commands ────────────────────────────────────────────────────
+function simSetCRB(id) {
+  const st = _simState[id] || {};
+  streamCmd(id, `SET_CRB ${st.crb ? 0 : 1}`);
+}
+
+function simToggleConfirm(id, stage) {
+  const st      = _simState[id] || {};
+  const stagon  = st.stagon || 0;
+  const inactive = 1 - stagon;
+  const confirms = st.confirms || [];
+  const isActive = (confirms[stage-1]|0) === stagon;
+  streamCmd(id, `SET_CONFIRM ${stage-1} ${isActive ? inactive : stagon}`);
+}
+
+function simToggleDet(id, det) {
+  const st   = _simState[id] || {};
+  const dets = st.dets || [];
+  streamCmd(id, `SET_DET ${det-1} ${dets[det-1] ? 0 : 1}`);
+}
+
+// ── Stream commands ───────────────────────────────────────────────────────────
+async function streamCmd(id, cmd) {
+  try {
+    const r = await fetch(`/api/mova/streams/${id}/cmd`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cmd}),
+    });
+    const j = await r.json();
+    if (!j.ok) toast(`Stream ${+id+1}: ${cmd} — failed`, 'error');
+    return j;
+  } catch(e) { toast(`Command error: ${e.message}`, 'error'); }
+}
+
+function setIoFlag(id, index, value) {
+  streamCmd(id, `SET_IO ${index} ${value}`);
+}
+
+function startStream(id) {
+  streamCmd(id, 'SET_IO 19 1').then(() => toast(`Stream ${+id+1}: On Control enabled`, 'success'));
+}
+
+function stopStream(id) {
+  if (!confirm(`Stop Stream ${+id+1}? This will unload the dataset.`)) return;
+  streamCmd(id, 'UNLOAD').then(() => toast(`Stream ${+id+1}: stopped`, 'success'));
+}
+
+function promptForce(id) {
+  const stage = prompt(`Force stage for stream ${+id+1} (0 = clear):`);
+  if (stage === null) return;
+  streamCmd(id, `FORCE_STAGE ${parseInt(stage,10)||0}`)
+    .then(() => toast(`Stream ${+id+1}: force ${stage}`, 'success'));
+}
+
+function resetStream(id) {
+  if (!confirm(`Reset Stream ${+id+1}? This clears faults and restarts.`)) return;
+  streamCmd(id, 'RESET').then(() => toast(`Stream ${+id+1}: reset`, 'success'));
+}
+
+function setSpeed(id, val) {
+  streamCmd(id, `SET_SPEED ${val}`).then(() => toast(`Stream ${+id+1}: speed ${val}x`, 'success'));
+}
+
+function setTOD(id, val) {
+  const h = parseInt(val, 10);
+  streamCmd(id, `SET_TOD_OFFSET ${h}`)
+    .then(() => toast(`Stream ${+id+1}: TOD offset ${h>=0?'+':''}${h}h`, 'success'));
+}
+
+// ── Card collapse ─────────────────────────────────────────────────────────────
+function toggleCard(id) {
+  const card    = document.getElementById(`card-${id}`);
+  const chevron = document.getElementById(`chevron-${id}`);
+  if (!card) return;
+  const collapsed = card.classList.toggle('collapsed');
+  if (chevron) chevron.textContent = collapsed ? '▶' : '▼';
+  try { localStorage.setItem(`pci-card-${id}-collapsed`, collapsed ? '1' : '0'); } catch(_) {}
+}
+
+// ── System info collapse ──────────────────────────────────────────────────────
+function toggleSysInfo() {
+  const body    = document.getElementById('sysinfo-body');
+  const chevron = document.getElementById('sysinfo-chevron');
+  if (!body) return;
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  if (chevron) chevron.textContent = collapsed ? '▼' : '▶';
+  try { localStorage.setItem('pci-sysinfo-collapsed', collapsed ? '0' : '1'); } catch(_) {}
+}
+
+// ── Licence ───────────────────────────────────────────────────────────────────
+async function loadLicence() {
+  try {
+    const [status, hw] = await Promise.allSettled([
+      fetch('/api/licence/status').then(r => r.json()),
+      fetch('/api/licence/hardware').then(r => r.json()),
+    ]);
+    if (status.status === 'fulfilled') {
+      const j = status.value;
+      ge('lic-status',  e => { e.textContent = j.valid ? 'VALID' : 'UNLICENSED'; e.className = `licence-val ${j.valid ? 'ok' : 'nok'}`; });
+      ge('lic-streams', e => e.textContent = j.max_streams || '—');
+      if (j.data) {
+        ge('lic-owner',    e => e.textContent = j.data.owner    || '—');
+        ge('lic-provider', e => e.textContent = j.data.provider || '—');
+      }
+    }
+    if (hw.status === 'fulfilled') {
+      ge('lic-fp', e => e.textContent = hw.value.fingerprint || '—');
+    }
+  } catch(_) {}
+}
+
+// ── Memory bar ────────────────────────────────────────────────────────────────
+async function loadMemory() {
+  try {
+    const j   = await fetch('/api/system/memory').then(r => r.json());
+    const mb  = j.current_bytes ? Math.round(j.current_bytes / 1048576) : null;
+    const max = j.max_bytes     ? Math.round(j.max_bytes     / 1048576) : null;
+    const pct = j.percent ?? 0;
+    ge('mem-label', e => e.textContent = (mb!==null&&max!==null) ? `${mb} / ${max} MB` : '—');
+    ge('mem-fill',  e => { e.style.width = `${Math.min(pct,100)}%`; e.style.background = pct>80?'var(--red)':pct>60?'var(--amber)':'var(--green)'; });
+  } catch(_) {}
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type='') {
+  const c = document.getElementById('toast-container'); if (!c) return;
+  const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg;
+  c.appendChild(t); setTimeout(() => t.remove(), 5000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    if (localStorage.getItem('pci-sysinfo-collapsed') === '1') {
+      const body = document.getElementById('sysinfo-body');
+      const chevron = document.getElementById('sysinfo-chevron');
+      if (body) body.style.display = 'none';
+      if (chevron) chevron.textContent = '▶';
+    }
+  } catch(_) {}
+
+  discoverStreams();
+  setInterval(discoverStreams, 10000);   // pick up newly started kernels
+
+  loadLicence();
+  loadMemory();
+  setInterval(loadMemory,    5000);
+
+  pollServices();
+  setInterval(pollServices, 5000);
+});
 </script>
 </body>
 </html>
