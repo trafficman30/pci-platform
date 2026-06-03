@@ -722,3 +722,72 @@ memory bar (green/amber/red thresholds from `/api/system/memory`).
 - Phase 7.5: service pages (ug405.html, rtig.html, autodim.html, offline.html, agd.html, flir.html)
 - app.py popup routes (needed if popups served without /static/ prefix)
 - /api/system/memory and /api/licence/* routes not yet implemented — gracefully no-ops
+
+---
+
+## 2026-06-03 — Phase 7.5 started — ug405.html
+
+### Phase 7.5 (partial) — ug405.html service page
+
+**Built:**
+- `web/static/ug405.html` — 237-line standalone UG405 status page.
+  Topbar + sidebar (← Dashboard link) + main + footer layout.
+  `<link rel="stylesheet" href="css/pci.css">` — no invented styles.
+  Page-specific inline style adds only: `.cards-row`, `.metric-value.sm`,
+  `.val-on`, `.val-off`, `.section-gap`, `.scn-block` — all using
+  existing design tokens.
+
+- `web/api/routes/ug405.py` — `GET /api/ug405/mapping` added.
+  Reads ug405.cfg via `load_ug405()` (respects `PCI_UG405_CFG` env var).
+  Returns `{scns, control:{scn:{field:{bit:sig}}}, reply:...}`.
+  Returns empty mapping (not 404) when ug405.cfg is absent (dev with no
+  deployment config).
+
+- `web/api/app.py` — `GET /ug405` route added → FileResponse ug405.html.
+
+**Page structure (ported from CM5 panel-ug405):**
+- 4 metric cards: Op Mode (coloured err/warn/ok), Instation IP:port, SCNs count,
+  Last Update timestamp.
+- Per-SCN signal tables: built from `/api/ug405/mapping` on load. Two-column
+  layout (row2) with Control and Reply tables side-by-side. Signal values
+  updated live via SSE `changes` events.
+- Instation Config table: accumulates `{t:'log', entry:{type:'Config'}}`
+  SSE events. Empty on fresh page load (not in snapshot — accumulates from
+  events seen during session).
+- opMode Transitions table: fixed 6-row table (1→2, 2→3, 3→3, 3→2, 3→1, 2→1).
+  Updated from `{t:'opmode'}` SSE events. State.opmode initialised as null to
+  prevent false transition on first snap.
+- Control Activity log: 30-entry rolling log of all `{t:'log'}` entries
+  (Config SETs and opMode changes). Config entries also update the Instation
+  Config table.
+
+**SSE event handling:**
+- `{t:'snap'}`: initialise opmode, instation, lastupdate, apply changes.
+  Does NOT record opMode transition (avoids false transition on page load).
+- `{t:'opmode'}`: update opmode, record transition only if previous state
+  was known (state.opmode !== null) and different.
+- `{t:'signal'}`: apply changes.
+- `{t:'config', field:'instation'}`: update instation metric card.
+- `{t:'log', entry}`: append to ctrl_log; if entry.type='Config' also update
+  cfg_state table.
+
+**Decisions:**
+- Mapping loaded via REST (`/api/ug405/mapping`), not Jinja2 template variable.
+  Same structure as CM5 `_build_mapping_json()`. Signal names: raw (no `!`
+  prefix) since display value already handles inversion.
+- cfg_state, opmode_transitions, ctrl_log are accumulated from events during
+  the browser session — not included in IPC snapshot. Acceptable for a monitoring
+  page; historical data is not needed.
+- opMode transition tracking: null-initialised state prevents the page
+  recording a false "1→2" transition when the first snap arrives.
+
+**Verification:**
+- Import check: `from pci.web.api.routes.ug405 import router, mapping` — OK.
+- Import check: `from pci.web.api.app import create_app` — OK.
+- HTML parse: OK.
+- All getElementById targets present in HTML.
+- No missing CSS classes (all in pci.css or inline style block).
+
+**Outstanding:**
+- Phase 7.5 continues: iobus.html, rtig.html, autodim.html, offline.html,
+  agd.html, flir.html
