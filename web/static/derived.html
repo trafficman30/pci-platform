@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOVA Derived Outputs</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* popup header override — revisit if page embedded in main dashboard */
+    main {
+      flex: 1;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .logo-mark { width: 22px; height: 22px; }
+    .logo-text { font-size: 14px; }
+    .hdr-right { display: flex; align-items: center; gap: 12px; }
+    .conn-label { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.55); }
+    .stream-badge { font-family: var(--mono); font-size: 11px; color: var(--accent); font-weight: 600; }
+
+    /* ── Cards ────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .card-hdr {
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-hdr .hdr-badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .card-hdr .hdr-badge.active { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+    .card-hdr .hdr-badge.warn   { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    .card-hdr .hdr-badge.alert  { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+    .card-body { padding: 10px 12px; }
+
+    /* ── Status indicator pills ───────────────────────────────────────────── */
+    .indicator-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .indicator {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 70px;
+      padding: 8px 10px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      cursor: default;
+      transition: all .2s;
+    }
+    .indicator.on    { background: #d1fae5; border-color: #6ee7b7; }
+    .indicator.warn  { background: #fef3c7; border-color: #fcd34d; }
+    .indicator.alert { background: #fee2e2; border-color: #fca5a5; }
+    .indicator-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+    .indicator.on    .indicator-label { color: #065f46; }
+    .indicator.warn  .indicator-label { color: #92400e; }
+    .indicator.alert .indicator-label { color: #991b1b; }
+    .indicator-val { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); }
+    .indicator.on    .indicator-val { color: #065f46; }
+    .indicator.warn  .indicator-val { color: #92400e; }
+    .indicator.alert .indicator-val { color: #991b1b; }
+
+    /* ── Numeric bar cells ────────────────────────────────────────────────── */
+    .num-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .num-cell {
+      display: flex;
+      flex-direction: column;
+      min-width: 90px;
+      padding: 7px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      cursor: default;
+    }
+    .num-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 3px; }
+    .num-val { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text); }
+    .num-val.pos { color: #065f46; }
+    .num-val.neg { color: #991b1b; }
+    .num-val.neu { color: var(--muted); }
+    .num-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 5px; overflow: hidden; }
+    .num-bar-fill { height: 100%; border-radius: 2px; transition: width .4s; background: var(--accent2); }
+    .num-bar-fill.green { background: #22c55e; }
+    .num-bar-fill.amber { background: #f59e0b; }
+    .num-bar-fill.red   { background: #ef4444; }
+
+    /* ── Link / lane / stage grid ─────────────────────────────────────────── */
+    .grid-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+    .grid-table th {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      text-align: center;
+      font-weight: 700;
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .grid-table td {
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      text-align: center;
+      color: var(--text);
+      background: var(--bg2);
+      transition: background .2s, color .2s;
+    }
+    .grid-table td.on    { background: #d1fae5; color: #065f46; font-weight: 700; }
+    .grid-table td.warn  { background: #fef3c7; color: #92400e; font-weight: 700; }
+    .grid-table td.alert { background: #fee2e2; color: #991b1b; font-weight: 700; }
+    .grid-table td.blue  { background: #dbeafe; color: #1e40af; font-weight: 700; }
+
+    /* derived page override — bit-cell used differently
+       here than in stream card dot grid */
+    .bit-row { display: flex; flex-wrap: wrap; gap: 4px; }
+    .bit-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 36px;
+      padding: 4px 5px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      cursor: default;
+      transition: all .2s;
+    }
+    .bit-cell.on    { background: #d1fae5; border-color: #6ee7b7; }
+    .bit-cell.warn  { background: #fef3c7; border-color: #fcd34d; }
+    .bit-cell.alert { background: #fee2e2; border-color: #fca5a5; }
+    .bit-cell.blue  { background: #dbeafe; border-color: #93c5fd; }
+    .bit-num { font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--muted); }
+    .bit-cell.on    .bit-num { color: #065f46; }
+    .bit-cell.warn  .bit-num { color: #92400e; }
+    .bit-cell.alert .bit-num { color: #991b1b; }
+    .bit-cell.blue  .bit-num { color: #1e40af; }
+
+    /* ── Flow bars ────────────────────────────────────────────────────────── */
+    .flow-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .flow-cell {
+      display: flex;
+      flex-direction: column;
+      width: 72px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      cursor: default;
+      transition: all .2s;
+    }
+    .flow-cell.sat  { background: #fef3c7; border-color: #fcd34d; }
+    .flow-cell.high { background: #fee2e2; border-color: #fca5a5; }
+    .flow-lane { font-family: var(--mono); font-size: 9px; color: var(--muted); }
+    .flow-val  { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); }
+    .flow-cell.sat  .flow-val { color: #92400e; }
+    .flow-cell.high .flow-val { color: #991b1b; }
+    .flow-bar { height: 3px; border-radius: 2px; background: var(--border); margin-top: 4px; overflow: hidden; }
+    .flow-bar-fill { height: 100%; border-radius: 2px; background: var(--accent2); transition: width .4s; }
+    .flow-cell.sat  .flow-bar-fill { background: #f59e0b; }
+    .flow-cell.high .flow-bar-fill { background: #ef4444; }
+
+    /* ── Staleness badge ─────────────────────────────────────────────────── */
+    .age { font-size: 10px; color: var(--muted); margin-left: auto; font-family: var(--mono); }
+    .age.stale { color: #ef4444; }
+
+    /* ── Empty state ─────────────────────────────────────────────────────── */
+    .empty { color: var(--muted); font-style: italic; font-size: 12px; padding: 8px 0; }
+
+    /* ── Tooltip support ─────────────────────────────────────────────────── */
+    [title] { cursor: help; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div class="logo-text">MOVA Derived Outputs</div>
+  </div>
+  <div class="hdr-right">
+    <span class="stream-badge" id="stream-label">Stream —</span>
+    <span class="conn-label" id="conn-label">connecting…</span>
+    <div class="conn-dot" id="conn-dot"></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── 1. Status Indicators ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-hdr">
+      System Status
+      <span class="hdr-badge" id="status-badge">—</span>
+    </div>
+    <div class="card-body">
+      <div class="indicator-row" id="status-indicators"></div>
+    </div>
+  </div>
+
+  <!-- ── 2. Optimiser ─────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-hdr">
+      Optimiser Assessment
+      <span class="age" id="opt-age">—</span>
+    </div>
+    <div class="card-body">
+      <div class="num-row" id="opt-nums"></div>
+    </div>
+  </div>
+
+  <!-- ── 3. Per-Link Detail ────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-hdr">
+      Per-Link Status
+      <span class="hdr-badge" id="endsat-badge">No Endsat</span>
+    </div>
+    <div class="card-body">
+      <div id="link-table-wrap"></div>
+    </div>
+  </div>
+
+  <!-- ── 4. Lane Flows ─────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-hdr">
+      Lane Flows (SMF — Smoothed veh/hr)
+      <span class="age" id="flow-age">—</span>
+    </div>
+    <div class="card-body">
+      <div class="flow-grid" id="flow-cells"></div>
+      <div id="junction-row" style="margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--muted)"></div>
+    </div>
+  </div>
+
+  <!-- ── 5. Stage Demands / Cycle ──────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-hdr">
+      Stage Demands (during last intergreen)
+      <span class="age" id="demand-age">—</span>
+    </div>
+    <div class="card-body">
+      <div class="bit-row" id="stage-demand-row"></div>
+      <div id="cycle-info" style="margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--muted)"></div>
+    </div>
+  </div>
+
+  <!-- ── 6. Suspect Detectors ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-hdr">
+      Suspect Detectors (SUS — type 1/2)
+      <span class="hdr-badge" id="suspect-badge">None</span>
+    </div>
+    <div class="card-body">
+      <div id="suspect-content"><div class="empty">Waiting for type 1/2 message…</div></div>
+    </div>
+  </div>
+
+  <!-- ── 7. EP / VDG / EM-PR ───────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-hdr">Extension Period / Variable Min Green / EM-PR</div>
+    <div class="card-body">
+      <div class="indicator-row" id="ep-indicators"></div>
+      <div id="vdg-link-row" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const params   = new URLSearchParams(location.search);
+  const streamId = parseInt(params.get('stream') || '0', 10);
+  const proto    = location.protocol === 'https:' ? 'wss' : 'ws';
+  const WS_URL   = `${proto}://${location.host}/ws/derived/${streamId}`;
+
+  document.getElementById('stream-label').textContent = `Stream ${streamId + 1}`;
+  document.title = `MOVA Derived — Stream ${streamId + 1}`;
+
+  const connDot   = document.getElementById('conn-dot');
+  const connLabel = document.getElementById('conn-label');
+
+  let ws = null;
+
+  function setConn(state) {
+    connDot.className    = 'conn-dot' + (state === 'live' ? ' live' : state === 'error' ? ' error' : '');
+    connLabel.textContent = state === 'live' ? 'live' : state === 'error' ? 'error' : 'connecting…';
+  }
+
+  function connect() {
+    ws = new WebSocket(WS_URL);
+    ws.onopen    = () => setConn('live');
+    ws.onerror   = () => setConn('error');
+    ws.onclose   = () => { setConn(''); setTimeout(connect, 2000); };
+    ws.onmessage = (ev) => {
+      try { render(JSON.parse(ev.data)); } catch(e) { console.warn('render error', e); }
+    };
+  }
+  connect();
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function ind(label, val, cls, tooltip) {
+    const d = document.createElement('div');
+    d.className = `indicator ${cls}`;
+    if (tooltip) d.title = tooltip;
+    d.innerHTML = `<div class="indicator-label">${label}</div><div class="indicator-val">${val}</div>`;
+    return d;
+  }
+
+  function numCell(label, val, cls, barPct, barCls, tooltip) {
+    const d = document.createElement('div');
+    d.className = 'num-cell';
+    if (tooltip) d.title = tooltip;
+    const bar = barPct != null
+      ? `<div class="num-bar"><div class="num-bar-fill ${barCls||''}" style="width:${Math.min(100,Math.max(0,barPct))}%"></div></div>`
+      : '';
+    d.innerHTML = `<div class="num-label">${label}</div><div class="num-val ${cls||''}">${val}</div>${bar}`;
+    return d;
+  }
+
+  function ageStr(ageS) {
+    if (ageS == null) return '—';
+    return ageS < 10 ? `${ageS}s ago` : `${Math.round(ageS)}s ago`;
+  }
+
+  function setAge(id, ageS) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = ageStr(ageS);
+    el.className   = 'age' + (ageS != null && ageS > 10 ? ' stale' : '');
+  }
+
+  // ── Main render ────────────────────────────────────────────────────────────
+
+  function render(data) {
+    const d   = data.derived || {};
+    const st  = data.status  || {};
+    const buf = data.buffers || {};
+    const io  = buf.io || [];
+
+    const ec      = io[16] || 0;
+    const onCtrl  = io[19] || 0;
+    const movaOn  = io[27] || 0;
+    const inWU    = buf.warmup_counter != null ? buf.warmup_counter : -1;
+    const ks      = buf.kernel_current_stage;
+    const ds      = buf.kernel_demanded_stage;
+    const ns      = buf.kernel_next_stage;
+    const stLabel = (st.current || '—').replace(/_/g,' ');
+
+    // ── 1. Status Indicators ────────────────────────────────────────────────
+    document.getElementById('status-badge').textContent = stLabel;
+    document.getElementById('status-badge').className =
+      'hdr-badge' + (onCtrl ? ' active' : ec >= 20 ? ' alert' : ec > 0 ? ' warn' : '');
+
+    const siEl = document.getElementById('status-indicators');
+    siEl.innerHTML = '';
+
+    siEl.appendChild(ind('HEALTHY',    d.healthy  ? 'YES' : 'NO',  d.healthy  ? 'on' : '',
+      'Composite: ON_CONTROL=1, EC=0, not in warmup'));
+    siEl.appendChild(ind('ON CONTROL', onCtrl ? 'YES' : 'NO', onCtrl ? 'on' : '',
+      'Kernel io[19] ON_CONTROL flag — set by GS_check when warmup complete and MOVA_ON=1'));
+    siEl.appendChild(ind('MOVA ON',    movaOn ? 'YES' : 'NO', movaOn ? 'on' : '',
+      'io[27] MOVA_ON — user-controlled; must be 1 for kernel to issue force outputs'));
+    siEl.appendChild(ind('EC',         ec,  ec >= 20 ? 'alert' : ec > 0 ? 'warn' : 'on',
+      'Error Count io[16]: 0=clean, 1-19=recoverable, ≥20=hard fault requires Reset'));
+    siEl.appendChild(ind('OSAT',       d.oversaturated ? 'YES' : 'NO', d.oversaturated ? 'alert' : '',
+      `Over-saturation: disbenefit > ${d.osat_threshold} (currently ${d.disbenefit})`));
+    siEl.appendChild(ind('HIGH FLOW',  d.high_flow ? 'YES' : 'NO', d.high_flow ? 'warn' : '',
+      `Any lane smoothed flow > ${d.flow_threshold} veh/hr`));
+    siEl.appendChild(ind('ENDSAT',     d.endsat_any ? 'YES' : 'NO', d.endsat_any ? 'warn' : '',
+      'Any link reached saturation (ESLI bit set in type 3/0 message)'));
+    siEl.appendChild(ind('VDG',        d.vdg_active ? 'ON' : 'OFF', d.vdg_active ? 'on' : '',
+      `Variable Min Green active — stage min green = ${d.vdg_stage_min != null ? d.vdg_stage_min : '—'}s`));
+    siEl.appendChild(ind('EP HOLD',    d.ep_hold ? 'ON' : 'OFF', d.ep_hold ? 'warn' : '',
+      'Extension Period: green is being held (do not change stage yet)'));
+    siEl.appendChild(ind('EP EXT',     d.ep_ext  ? 'ON' : 'OFF', d.ep_ext  ? 'warn' : '',
+      'Extension Period: green is being extended beyond minimum'));
+    siEl.appendChild(ind('EM/PR TRUNC',d.em_pr_truncation ? 'YES' : 'NO', d.em_pr_truncation ? 'blue' : '',
+      `EM (Early Minimum) or PR (Predicted Red) stage truncation active — EM stage:${d.em_stage||0} PR stage:${d.pr_stage||0}`));
+    siEl.appendChild(ind('SUSPECT',
+      d.suspect_any ? `${(d.suspect_dets||[]).filter(v=>v).length} DET` : 'NONE',
+      d.suspect_any ? 'alert' : '',
+      'Suspect detectors flagged by kernel (SUS field, type 1/2) — detectors with abnormal gap/occupancy patterns'));
+    siEl.appendChild(ind('PLAN',       d.plan_id || '—', d.plan_id ? 'on' : '',
+      'Active data plan number (TOD switching handled by Python-side timetable parser)'));
+    siEl.appendChild(ind('KS',         ks != null ? ks : '—', '',
+      'Current Stage — stage the kernel is currently forcing'));
+    siEl.appendChild(ind('DS',         ds != null ? ds : '—', '',
+      'Demanded Stage — stage the optimiser is requesting next'));
+    siEl.appendChild(ind('NS',         ns != null ? ns : '—', '',
+      'Next Stage — stage that will follow the current intergreen'));
+
+    // ── 2. Optimiser ────────────────────────────────────────────────────────
+    setAge('opt-age', d.opt_age_s);
+
+    const optEl = document.getElementById('opt-nums');
+    optEl.innerHTML = '';
+
+    const benPct = Math.abs(d.benefit || 0) / 2;
+    const disPct = Math.min(100, (d.disbenefit || 0) * 2);
+    const prPct  = Math.min(100, (d.predicted_red || 0));
+    const cycPct = Math.min(100, ((d.cycle_time || 0) / 120) * 100);
+
+    optEl.appendChild(numCell('BENEFIT', d.benefit || 0,
+      (d.benefit||0) >= 0 ? 'pos' : 'neg', benPct, 'green',
+      'Net optimiser benefit (type 4 BDR): positive = MOVA improving conditions'));
+    optEl.appendChild(numCell('DISBENEFIT', d.disbenefit || 0,
+      (d.disbenefit||0) > (d.osat_threshold||20) ? 'neg' : '',
+      disPct, (d.disbenefit||0) > (d.osat_threshold||20) ? 'red' : 'amber',
+      'Disbenefit (type 4 BDR): saturated links penalise the optimiser. High = junction overloaded'));
+    optEl.appendChild(numCell('PRED RED', d.predicted_red || 0,
+      (d.predicted_red||0) > 50 ? 'neg' : '',
+      prPct, (d.predicted_red||0) > 50 ? 'amber' : 'green',
+      'Predicted red time (type 4): expected seconds of red across approaches'));
+    optEl.appendChild(numCell('CYCLE TIME', d.cycle_time ? `${d.cycle_time}s` : '—',
+      '', cycPct, 'green',
+      'Observed cycle time from type 1/2 message (SMCYC)'));
+    optEl.appendChild(numCell('JCN FLOW', d.junction_flow || 0,
+      '', Math.min(100, (d.junction_flow||0)/20), 'green',
+      'Total junction smoothed flow (sum of all lane SMF values, type 1/1)'));
+    optEl.appendChild(numCell('LAO SMX', d.lao_smx || 0,
+      '', 0, '',
+      'Lane approach over-saturation multiplier (type 1/1): higher = more saturated'));
+    optEl.appendChild(numCell('LAM', d.lam || 0,
+      '', 0, '',
+      'Lane approach management index (type 1/1): composite junction loading measure'));
+
+    // ── 3. Per-Link Table ────────────────────────────────────────────────────
+    const noLinks = d.no_links || 0;
+    const esliAny = d.endsat_any;
+    document.getElementById('endsat-badge').textContent = esliAny ? `Endsat Active` : 'No Endsat';
+    document.getElementById('endsat-badge').className   = 'hdr-badge' + (esliAny ? ' warn' : '');
+
+    const linkWrap = document.getElementById('link-table-wrap');
+    if (noLinks === 0) {
+      linkWrap.innerHTML = '<div class="empty">No dataset loaded</div>';
+    } else {
+      let html = `<table class="grid-table">
+        <thead><tr>
+          <th title="Link number (1-based)">LINK</th>
+          <th title="Endsat bit — link reached saturation during current green (type 3/0 ESLI)">ENDSAT</th>
+          <th title="Net benefit from this link (type 4 per-link). Positive = profitable to serve">NET BEN</th>
+          <th title="Raw link benefit (type 4). Benefit of serving this link">BENEFIT</th>
+          <th title="Free red percentage — proportion of red time not used productively (type 4). High = underserved">FREE RED %</th>
+          <th title="Excess green percentage — proportion of green time beyond what was needed (type 4). High = over-served">XCESS GRN %</th>
+          <th title="Variable min green for this link in tenths-seconds (type 2). 0 = not VDG limited">VDG MIN (s)</th>
+          <th title="OSAT+ES probability from type 5/3 message at last stage change. Higher = link was over-saturated or at endsat">OSAT+ES</th>
+          <th title="Bonus pulse active during last intergreen (type 6/1 BON). Link getting extra time">BONUS</th>
+        </tr></thead>
+        <tbody>`;
+      for (let lk = 0; lk < noLinks; lk++) {
+        const es  = (d.endsat_link||[])[lk] || 0;
+        const nb  = (d.link_netben||[])[lk]  || 0;
+        const ben = (d.link_ben||[])[lk]     || 0;
+        const fr  = (d.link_fred||[])[lk]    || 0;
+        const xg  = (d.link_xg||[])[lk]      || 0;
+        const vdg = (d.vdg_link_min||[])[lk] || 0;
+        const oe  = (d.osat_es||[])[lk]      || 0;
+        const bon = (d.link_bonus||[])[lk]   || 0;
+        html += `<tr>
+          <td><strong>L${lk+1}</strong></td>
+          <td class="${es ? 'warn' : ''}">${es ? '■ YES' : '—'}</td>
+          <td class="${nb > 0 ? 'on' : nb < 0 ? 'alert' : ''}">${nb}</td>
+          <td class="${ben > 0 ? 'on' : ''}">${ben}</td>
+          <td class="${fr > 60 ? 'warn' : ''}">${fr}%</td>
+          <td class="${xg > 60 ? 'blue' : ''}">${xg}%</td>
+          <td class="${vdg > 0 ? 'on' : ''}">${vdg > 0 ? vdg : '—'}</td>
+          <td class="${oe > 50 ? 'alert' : oe > 20 ? 'warn' : ''}">${oe || '—'}</td>
+          <td class="${bon ? 'blue' : ''}">${bon ? '■ YES' : '—'}</td>
+        </tr>`;
+      }
+      html += '</tbody></table>';
+      linkWrap.innerHTML = html;
+    }
+
+    // ── 4. Lane Flows ────────────────────────────────────────────────────────
+    setAge('flow-age', d.flow_age_s);
+    const noLanes = d.no_lanes || 0;
+    const flowEl  = document.getElementById('flow-cells');
+    const flowMax = 1800;
+    flowEl.innerHTML = '';
+    for (let ln = 0; ln < noLanes; ln++) {
+      const f   = (d.smoothed_flow||[])[ln] || 0;
+      const sat = (d.lane_sat||[])[ln] || 0;
+      const hi  = f > (d.flow_threshold || 800);
+      const pct = Math.min(100, (f / flowMax) * 100);
+      const cls = hi ? 'high' : sat ? 'sat' : '';
+      const fc  = document.createElement('div');
+      fc.className = `flow-cell ${cls}`;
+      fc.title = `Lane ${ln+1}: ${f} veh/hr${sat ? ' — SATURATED' : ''}${hi ? ' — HIGH FLOW' : ''}`;
+      fc.innerHTML = `<div class="flow-lane">L${ln+1}${sat ? ' SAT' : ''}</div><div class="flow-val">${f}</div><div class="flow-bar"><div class="flow-bar-fill" style="width:${pct}%"></div></div>`;
+      flowEl.appendChild(fc);
+    }
+    if (noLanes === 0) flowEl.innerHTML = '<div class="empty">No lane data yet</div>';
+
+    const jcnEl = document.getElementById('junction-row');
+    if (d.junction_flow || d.lam) {
+      jcnEl.textContent =
+        `Junction total: ${d.junction_flow || 0} veh/hr` +
+        (d.lam     ? `  ·  LAM: ${d.lam}`          : '') +
+        (d.lao_smx ? `  ·  LAOSMX: ${d.lao_smx}`   : '') +
+        (d.cut_max ? `  ·  CUT MAX: ${d.cut_max}`   : '');
+    } else {
+      jcnEl.textContent = '';
+    }
+
+    // ── 5. Stage Demands ─────────────────────────────────────────────────────
+    setAge('demand-age', d.demand_age_s);
+    const noStages  = d.no_stages || 0;
+    const demEl     = document.getElementById('stage-demand-row');
+    demEl.innerHTML = '';
+    for (let st = 0; st < noStages; st++) {
+      const dem = (d.stage_demand||[])[st] || 0;
+      const bc  = document.createElement('div');
+      bc.className = `bit-cell ${dem ? 'on' : ''}`;
+      bc.title     = `Stage ${st+1} ${dem ? 'had a detector demand during the last intergreen' : 'had no demand during last intergreen'}`;
+      bc.innerHTML = `<div class="bit-num">S${st+1}</div>`;
+      demEl.appendChild(bc);
+    }
+    if (noStages === 0) demEl.innerHTML = '<div class="empty">No data</div>';
+
+    const cycEl = document.getElementById('cycle-info');
+    const driftArr = (d.drift_max || []).map((v,i) => `S${i+1}:${v}`).join('  ');
+    cycEl.textContent = d.cycle_time
+      ? `Cycle: ${d.cycle_time}s    Drift max: ${driftArr || '—'}`
+      : '';
+
+    // ── 6. Suspect Detectors ─────────────────────────────────────────────────
+    const suspBadge = document.getElementById('suspect-badge');
+    const suspEl    = document.getElementById('suspect-content');
+    const detMeta   = data.detector_meta || [];
+    const typeMap   = {X:'Loop', IN:'Inductive', Stopline:'Stopline', XSINK:'Loop (sink)',
+                       Pedestrian:'Pedestrian', 'Simple Traffic':'Simple Traffic', V:'Video', M:'Manual'};
+
+    if (!d.suspect_dets || d.suspect_dets.length === 0) {
+      suspBadge.textContent = 'No dataset';
+      suspBadge.className   = 'hdr-badge';
+      suspEl.innerHTML = '<div class="empty">No dataset loaded</div>';
+    } else {
+      const suspects = [];
+      (d.suspect_dets || []).forEach((v, i) => { if (v) suspects.push(i + 1); });
+
+      suspBadge.textContent = suspects.length ? `${suspects.length} suspect` : 'All clear';
+      suspBadge.className   = 'hdr-badge' + (suspects.length ? ' alert' : ' active');
+
+      if (suspects.length === 0) {
+        suspEl.innerHTML = '<div style="color:var(--green);font-weight:600;font-family:var(--mono)">✓ All detectors healthy</div>';
+      } else {
+        let html = '<div class="bit-row">';
+        suspects.forEach(detNum => {
+          const meta = detMeta.find(m => m.id === detNum);
+          const typeName = meta ? (typeMap[meta.type] || meta.type || '?') : '?';
+          const parts = [`Det ${detNum}`, `Type: ${meta ? meta.type : '?'} — ${typeName}`];
+          if (meta && meta.link != null) parts.push(`Link: ${meta.link}`);
+          if (meta && meta.lane != null) parts.push(`Lane: ${meta.lane}`);
+          if (meta && meta.dist != null && meta.dist < 999990) parts.push(`${meta.dist.toFixed(1)}m`);
+          const tip = parts.join('  |  ');
+          html += `<div class="bit-cell alert" title="${tip}" style="min-width:52px;cursor:help">
+            <div class="bit-num" style="font-size:11px;font-weight:700">D${detNum}</div>
+            <div class="bit-num" style="margin-top:1px">${meta ? meta.type : '?'}</div>
+            ${meta && meta.lane != null ? `<div class="bit-num">L${meta.lane}</div>` : ''}
+            ${meta && meta.link != null ? `<div class="bit-num">Lk${meta.link}</div>` : ''}
+          </div>`;
+        });
+        html += '</div>';
+        html += `<div style="margin-top:10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px">All detectors — red = suspect</div>`;
+        html += '<div class="bit-row">';
+        (d.suspect_dets || []).forEach((v, i) => {
+          const detNum   = i + 1;
+          const meta     = detMeta.find(m => m.id === detNum);
+          const typeName = meta ? (typeMap[meta.type] || meta.type) : '';
+          const tip = meta
+            ? [`Det ${detNum}`, `${meta.type} — ${typeName}`,
+               meta.lane != null ? `Lane: ${meta.lane}` : '',
+               meta.link != null ? `Link: ${meta.link}` : '',
+               meta.dist != null && meta.dist < 999990 ? `${meta.dist.toFixed(1)}m` : ''].filter(Boolean).join('  |  ')
+            : `Detector ${detNum}`;
+          html += `<div class="bit-cell ${v ? 'alert' : ''}" title="${tip}" style="min-width:30px;cursor:help">
+            <div class="bit-num">${detNum}</div>
+          </div>`;
+        });
+        html += '</div>';
+        suspEl.innerHTML = html;
+      }
+    }
+
+    // ── 7. EP / VDG / EM-PR ──────────────────────────────────────────────────
+    const epEl = document.getElementById('ep-indicators');
+    epEl.innerHTML = '';
+
+    epEl.appendChild(ind('EP HOLD',
+      d.ep_hold ? 'HOLDING' : 'CLEAR',
+      d.ep_hold ? 'warn' : '',
+      `Extension Period hold marker (type 3/2 raw[4]). HOLDING = kernel is waiting before deciding to end the green. Timer: ${d.ep_timer || '—'} deciseconds`));
+    epEl.appendChild(ind('EP EXT',
+      d.ep_ext ? 'EXTENDING' : 'CLEAR',
+      d.ep_ext ? 'warn' : '',
+      `Extension Period extension marker (type 3/2 raw[5]). EXTENDING = current green is being held beyond minimum to allow vehicles to clear`));
+    epEl.appendChild(ind('VDG',
+      d.vdg_active ? `${d.vdg_stage_min != null ? d.vdg_stage_min : '—'}s` : 'OFF',
+      d.vdg_active ? 'on' : '',
+      `Variable min green (type 2 SMIN): dynamic minimum green time computed by MOVA for current demand conditions. Replaces the dataset fixed minimum.`));
+    epEl.appendChild(ind('EM STAGE',
+      d.em_stage || '—',
+      d.em_pr_truncation ? 'blue' : '',
+      `Early Minimum stage — MOVA is shortening current green because this stage has sufficient demand (EM/PR type 5/4 ENX field)`));
+    epEl.appendChild(ind('PR STAGE',
+      d.pr_stage || '—',
+      d.em_pr_truncation ? 'blue' : '',
+      `Predicted Red stage — MOVA is shortening current green because predicted red on this approach is excessive (EM/PR type 5/4 PNX field)`));
+
+    // VDG per-link row
+    const vdgLinkEl = document.getElementById('vdg-link-row');
+    if (d.vdg_active && d.vdg_link_min && d.vdg_link_min.length > 0 && d.vdg_link_min.some(v=>v>0)) {
+      let html = `<div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">VDG per link (min green, seconds)</div><div class="bit-row">`;
+      for (let lk = 0; lk < (d.no_links||0); lk++) {
+        const v = (d.vdg_link_min||[])[lk] || 0;
+        html += `<div class="bit-cell ${v>0?'on':''}" title="Link ${lk+1} VDG minimum green: ${v>0?v+'s':'not limited'}"><div class="bit-num">L${lk+1}<br>${v>0?v:'—'}</div></div>`;
+      }
+      html += '</div>';
+      vdgLinkEl.innerHTML = html;
+    } else {
+      vdgLinkEl.innerHTML = '';
+    }
+  }
+</script>
+</body>
+</html>
