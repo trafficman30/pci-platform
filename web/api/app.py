@@ -75,6 +75,9 @@ def create_app(registry, ug405_client=None, rtig_client=None,
     app.include_router(sse_router,     prefix="/sse",         tags=["SSE"])
 
     if os.path.isdir(_STATIC):
+        _css_dir = os.path.join(_STATIC, "css")
+        if os.path.isdir(_css_dir):
+            app.mount("/css", StaticFiles(directory=_css_dir), name="css")
         app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
         @app.get("/", include_in_schema=False)

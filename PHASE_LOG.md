@@ -922,3 +922,56 @@ ug405.html, iobus.html, rtig.html, autodim.html, offline.html, agd.html, flir.ht
 - Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
   Read MICKS_MOVA_TOOLS_INFO_FOR_AML/ tcpdumps, read /opt/MOVA/pci_mova/protocol/mova_tools.py,
   summarise findings, then build mova/protocol/aml_server.py.
+
+---
+
+## 2026-06-03 — Phase 7.5.5 integrated test
+
+### Phase 7.5.5 — Full stack integration test  ✓ COMPLETE
+
+**Stack tested:** IOBus (sim driver) + MOVA kernel stream 0 + pci.web on :8081/:9010
+
+**Bugs found and fixed:**
+
+1. **Old session processes still running** — iobus/mova/web from Jun02 session were never
+   stopped. They held ports 8081 and 9010, causing the new web process to fail on bind.
+   Fix: kill old processes, clean stale sockets, restart fresh.
+
+2. **CSS 404 on clean URLs** — HTML pages served at `/`, `/ug405` etc. reference
+   `css/pci.css` (relative path), which resolves to `/css/pci.css`. The static directory
+   was only mounted at `/static/`, so `/css/pci.css` 404'd.
+   Fix: added `app.mount("/css", StaticFiles(directory=css_dir), name="css")` in app.py,
+   before the `/static` mount.
+
+3. **RTIG port conflict kills web process** — port 9010 was held by `/opt/ug405-env/bin/python main.py`
+   (CM5 legacy process). When RTIG uvicorn server failed to bind, it raised SystemExit(1),
+   which the `asyncio.wait(FIRST_COMPLETED)` pattern treated as completion, cancelling the
+   main UI server too — entire web process exited.
+   Fix: wrapped `rtig_srv.serve()` in `_rtig_guarded()` that catches SystemExit and logs a
+   warning. Main server now runs independently; RTIG failure is non-fatal. CM5 service was
+   also stopped to free port 9010 for this deployment.
+
+**Test results:**
+
+| Check | Result |
+|---|---|
+| IOBus startup | ✓ 31 signals (24 base + 7 sim), pci.iobus ready |
+| MOVA kernel stream 0 | ✓ connected to IOBus, IPC sockets up, tick loop running |
+| Web :8081 | ✓ HTTP 200 |
+| RTIG receiver :9010 | ✓ HTTP binding confirmed |
+| Dashboard `/` | ✓ HTTP 200 |
+| CSS `/css/pci.css` | ✓ HTTP 200 after fix |
+| SSE `/sse/mova/0` | ✓ snaps at ~1Hz, kernel_version=M8.0.0.435 |
+| Stream 0 status | ✓ NOT_STARTED (no dataset loaded — correct) |
+| CRB | ✓ crb=true (READY) |
+| Detectors pulsing | ✓ det.1 observed toggling via sim driver |
+| All 7 service pages | ✓ HTTP 200 (ug405, iobus, rtig, autodim, offline, agd, flir) |
+| /api/iobus/signals | ✓ live signal table returned |
+
+**Expected log noise (not errors):**
+- IPC send_command warnings for ug405/rtig/autodim/offline every 5s — these services are
+  disabled in platform.cfg; the dashboard polls their ping endpoints and gets connection
+  refused. Normal behaviour when only IOBus + MOVA + web are running.
+
+**Outstanding:**
+- Phase 7.6: MOVA Tools AML connection (gate for Phase 8)

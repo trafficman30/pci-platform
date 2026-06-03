@@ -39,6 +39,7 @@ def _read_config():
 
 
 async def _serve(app, port, rtig_app, rtig_port):
+    log = logging.getLogger('pci.web')
     main_cfg = uvicorn.Config(app,      host='0.0.0.0', port=port,
                               log_level='info')
     rtig_cfg = uvicorn.Config(rtig_app, host='0.0.0.0', port=rtig_port,
@@ -48,14 +49,16 @@ async def _serve(app, port, rtig_app, rtig_port):
     rtig_srv = uvicorn.Server(rtig_cfg)
     rtig_srv.install_signal_handlers = False   # only main server handles SIGTERM
 
-    tasks = [
-        asyncio.ensure_future(main_srv.serve()),
-        asyncio.ensure_future(rtig_srv.serve()),
-    ]
-    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-    for t in pending:
-        t.cancel()
-    await asyncio.gather(*pending, return_exceptions=True)
+    async def _rtig_guarded():
+        try:
+            await rtig_srv.serve()
+        except SystemExit:
+            log.warning("RTIG HTTP receiver could not bind on :%d — port in use, RTIG disabled", rtig_port)
+
+    rtig_task = asyncio.ensure_future(_rtig_guarded())
+    await main_srv.serve()
+    rtig_task.cancel()
+    await asyncio.gather(rtig_task, return_exceptions=True)
 
 
 def main():
