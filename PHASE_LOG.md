@@ -601,3 +601,31 @@ all /api/dataset/* and /api/streams/* paths unchanged.
 **Outstanding:**
 - Write web/static/dataset.html (next session, start here)
 - Then continue with remaining 8 popup pages
+
+---
+
+## 2026-06-03 — Phase 7.3 continued
+
+### Phase 7.3 — Port MOVA popup pages (session 2)  ⧖ IN PROGRESS
+
+**Pages completed this session:**
+- `web/static/errors.html` — faults popup, WebSocket `/ws/errors/{streamId}`, active faults + history table
+- `web/static/history.html` — full historical viewer, timeline SVG, 6 tabs (TMA/DetCounts/SatFlow/Derived/Messages/Errors), cursor scrubbing, auto-reload for today
+- `web/static/analysis.html` — offline JSONL analyser, SAM View, API+file load, IndexedDB site persistence, play engine
+
+**CSS approach (consistent across all three):**
+- `<link rel="stylesheet" href="css/pci.css">` replacing all inline `:root`/`*`/body base styles
+- `body { height:100vh }` override where flex-scroll layout requires it (flex-popup pattern)
+- Logo-mark size override (source varies 18–24px; pci.css 28px)
+- Conflict comments added where page-specific classes override pci.css rules (`.section-title`, `.badge`)
+- All page-specific component styles kept inline
+
+**Porting notes saved to PORTING_NOTES.md for next session:**
+- `satflow.html` — small scrollable page, no height override, `.section-title` conflict
+- `tma.html` — flex popup, dead `renderCounts` JS (no DOM target), leave as-is
+- `syslog.html` — **dark theme**: keep `:root` inline to override pci.css light tokens
+
+**Outstanding:**
+- `satflow.html`, `tma.html`, `syslog.html` — notes ready, write next session
+- Phase 7.4: dashboard index.html
+- Phase 7.5: service pages
