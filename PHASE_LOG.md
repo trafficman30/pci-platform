@@ -866,3 +866,59 @@ memory bar (green/amber/red thresholds from `/api/system/memory`).
 
 **Outstanding:**
 - Phase 7.5 continues: agd.html, flir.html
+
+---
+
+## 2026-06-03 — Phase 7.5 complete — agd.html and flir.html
+
+### Phase 7.5 final — agd.html + flir.html  ✓ COMPLETE
+
+**Built:**
+
+**agd.html — AGD650 radar detector adapter page:**
+- `web/static/agd.html` — 4 metric cards (Units, Total Zones, Faulted, Last Update).
+  Per-unit blocks: custom `.unit-hdr` (ID, IP:port, OK/FAULT badge) above a `.table-card`
+  with one row per zone. Zone columns: Zone ID, Detected dot, plus one column per class
+  type discovered dynamically from the snapshot (e.g. pedestrian, bicycle, vehicle).
+  Detection events log (last 20 from snap.events, reversed — newest first): time, unit,
+  zone, DETECTED/CLEAR badge, classes text.
+  Fault & Reconnect log (accumulated from `{t:'fault'}` and `{t:'reconnect'}` SSE events):
+  time, unit, FAULT/RECONNECT badge, detail message. Rolling 30-entry log.
+  Faulted metric value coloured `.err` when > 0, `.ok` when all clear.
+
+**flir.html — FLIR camera adapter page:**
+- `web/static/flir.html` — 3 metric cards (Cameras, Total Zones, Last Update).
+  Per-camera blocks: custom `.cam-hdr` (ID, IP:port) above a `.table-card` with fixed
+  columns: Zone, Occupied, Dilemma, Pedestrian, Bicycle, Vehicle.
+  Signal dots match zone state; Dilemma dot uses amber (`.sig-dot.dilemma.on`) to
+  distinguish it from occupied (green). No fault log — FLIR reconnects silently,
+  no fault tracking in snapshot.
+  Zone events log (last 20 from snap.events, reversed): time, camera, zone, event type,
+  BEGIN/END badge, class string.
+
+**web/api/app.py:**
+- `GET /agd` and `GET /flir` page routes added.
+
+**Decisions:**
+- AGD class columns are discovered dynamically from the first zone's keys (excluding
+  `id` and `detected`) — handles any class configuration without hardcoding.
+- FLIR zone columns are fixed (occupied/dilemma/has_pedestrian/has_bicycle/has_vehicle)
+  matching the fixed ZONE_TYPES list in flir/service.py.
+- FLIR has no fault log — the service reconnects via run_forever with no fault state
+  in the snapshot. The events log is sufficient for monitoring.
+- Dilemma dot rendered amber to visually distinguish from occupied (green); matches
+  the semantic meaning of a dilemma zone (caution, not detection).
+
+**Verification:**
+- `from pci.web.api.app import create_app` — OK (both routes present).
+- HTML structure: all getElementById targets present in both pages.
+- All CSS classes verified against pci.css (badge-green/red/gray, metric-value.ok/err,
+  sig-dot/det-dot pattern).
+
+**Phase 7.5 COMPLETE** — all six service pages done:
+ug405.html, iobus.html, rtig.html, autodim.html, offline.html, agd.html, flir.html.
+
+**Outstanding:**
+- Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+  Read MICKS_MOVA_TOOLS_INFO_FOR_AML/ tcpdumps, read /opt/MOVA/pci_mova/protocol/mova_tools.py,
+  summarise findings, then build mova/protocol/aml_server.py.
