@@ -973,5 +973,41 @@ ug405.html, iobus.html, rtig.html, autodim.html, offline.html, agd.html, flir.ht
   disabled in platform.cfg; the dashboard polls their ping endpoints and gets connection
   refused. Normal behaviour when only IOBus + MOVA + web are running.
 
+---
+
+## 2026-06-03 — Phase 7.5.5 continued — bug fixes from integration test
+
+### Fixes applied (Issues 2–5 from integration test review)
+
+**Issue 2 — detector bit grid blank without dataset (index.html:489)**
+- `kernel_deton` is only populated by `MI_get_all_detectors()` in wrapper.py after
+  `kernel.tick()`. `kernel.tick()` is gated on dataset present. Without dataset,
+  `kernel_deton` is 64 zeros (truthy array) — JS `||` never fell through to `detectors`.
+- Fix: `(s.dataset ? buffers.kernel_deton : buffers.detectors) || []`
+  — uses IOBus raw values (`detectors`) when no dataset loaded.
+
+**Issue 3 — asyncio.get_event_loop() deprecated (autodim.py:34)**
+- `asyncio.get_event_loop()` deprecated in Python 3.10+, raises RuntimeError in Python 3.12.
+- Fix: one-line change to `asyncio.get_running_loop()`.
+
+**Issue 4 — /api/system/log missing (syslog.html showed empty)**
+- `syslog.html` polls `GET /api/system/log?lines=N&level=X` every 3s — route did not exist.
+- Built: `web/api/routes/system.py` — reads tail of `pci.log`, exact-match level filter
+  (DEBUG/INFO/WARNING/ERROR), returns `{"lines": [...], "total": N}`.
+- Mounted at `/api/system` in app.py.
+- Verified: total=3340, lines filtered to 49 INFO entries — correct.
+
+**Issue 5 — RTIG/UG405 configs empty (no working example)**
+- `config/rtig.cfg` — added RTIG1-5 → virt.10-14 signal map from CM5.
+- `config/ug405.cfg` — added five SCN blocks from CM5 deployment:
+  X0330 (VSn detector occupancy), J0331 (full junction with inverted greens),
+  J0332 (4-stage junction), J0333 (virtual signals), MICK_VC (vehicle count).
+- PCI parser handles CM5 `!=` inversion notation correctly (`k.endswith('!')` after split).
+- Verified: all 5 SCNs load, control signals parsed, J0331 Gn inversion prefix `!` applied.
+- [LIVE] section from CM5 not copied — managed by pci.ug405 service at runtime.
+
+**Issue 1 (dataset routes) — deferred to next session** (full router implementation).
+
 **Outstanding:**
+- Issue 1: /api/dataset/ router — list, upload, delete, load, info, detail endpoints
 - Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
