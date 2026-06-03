@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOVA Dataset</title>
+<link rel="stylesheet" href="css/pci.css">
+<style>
+/* popup header override — revisit if page embedded in main dashboard */
+header{background:var(--topbar);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;height:auto;position:static}
+.hdr-title{font-size:14px;font-weight:600;color:#fff;letter-spacing:.04em}
+.hdr-sub{font-size:11px;color:rgba(255,255,255,.5);font-family:var(--mono)}
+.tabs{display:flex;gap:2px;background:var(--topbar);padding:0 20px;border-bottom:2px solid var(--accent);flex-wrap:wrap}
+.tab{padding:8px 16px;font-size:12px;font-weight:600;color:rgba(255,255,255,.5);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;letter-spacing:.04em;transition:color .15s}
+.tab:hover{color:rgba(255,255,255,.8)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.content{padding:16px 20px;max-width:1200px}
+.section{display:none}
+.section.active{display:block}
+.section-title{font-size:13px;font-weight:700;color:var(--topbar);margin:0 0 10px;padding-bottom:6px;border-bottom:2px solid var(--accent);letter-spacing:.04em}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-bottom:16px}
+.info-cell{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:8px 10px}
+.info-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px}
+.info-val{font-family:var(--mono);font-size:12px;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px}
+th{background:#f0f2f5;border:1px solid var(--border);padding:5px 8px;text-align:left;font-weight:600;color:var(--topbar);font-size:11px;white-space:nowrap}
+td{border:1px solid var(--border);padding:4px 8px;vertical-align:top}
+tr:nth-child(even) td{background:#fafbfc}
+.cell-key{background:#e6ffe6;font-weight:700;font-family:var(--mono)}
+.cell-num{font-family:var(--mono);text-align:center}
+.banned{color:#ccc;font-style:italic}
+.plan-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:12px}
+.plan-hdr{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.plan-num{background:var(--topbar);color:#fff;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px}
+.plan-name{font-weight:600;font-size:13px}
+.plan-rev{background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;letter-spacing:.04em}
+.plan-trig{background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px}
+.sched-row{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+.sched-time{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--topbar);min-width:130px}
+.day-pills{display:flex;gap:3px;flex-wrap:wrap}
+.day{padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;font-family:var(--mono)}
+.day-on{background:#1a2744;color:#00d4ff}
+.day-off{background:#f3f4f6;color:#ccc}
+.matrix-wrap{overflow-x:auto}
+.matrix-wrap table th,.matrix-wrap table td{min-width:36px;text-align:center;font-family:var(--mono);font-size:11px}
+.mat-self{color:#ccc;background:#f9fafb}
+.mat-banned{background:#fee2e2;color:#991b1b}
+.mat-val{background:#f0f9ff}
+.ep-badge{background:#dbeafe;color:#1e40af;font-size:9px;font-weight:700;padding:0 4px;border-radius:3px}
+#loading{padding:40px;text-align:center;color:var(--muted)}
+#error-msg{padding:20px;color:var(--red);font-weight:600}
+.upload-zone{border:2px dashed var(--border);border-radius:6px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg3);margin-bottom:14px}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:#f0f9ff}
+.upload-icon{font-size:20px;margin-bottom:4px;color:var(--muted)}
+.upload-text{font-size:13px;color:var(--text)}
+.upload-hint{font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+#ds-file-input{display:none}
+.ds-list{display:grid;gap:6px}
+.ds-item{padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;transition:border-color .15s}
+.ds-item:hover{border-color:var(--accent)}
+.ds-item-row{display:flex;align-items:center;gap:8px}
+.ds-name{font-family:var(--mono);font-size:12px;flex:1;color:var(--text)}
+.ds-btn{padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.ds-btn:hover{border-color:var(--accent);color:#0369a1;background:#f0f9ff}
+.ds-idline{font-family:var(--mono);font-size:10px;padding-top:3px;color:var(--muted)}
+.ds-panel{display:none;margin-top:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px}
+.ds-panel-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.ds-label{font-size:9px;color:var(--muted);font-family:var(--mono);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:3px}
+.ds-select{background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:4px 6px;border-radius:3px}
+.loaded-badge{display:inline-block;background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;margin-left:6px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="hdr-title">MOVA Dataset</div>
+    <div class="hdr-sub" id="hdr-sub">Stream —</div>
+  </div>
+  <div class="hdr-sub" id="hdr-kver"></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <div class="tab active" data-tab="datasets">Datasets</div>
+  <div class="tab" data-tab="info">Controller</div>
+  <div class="tab" data-tab="plans">Data Plans</div>
+  <div class="tab" data-tab="stages">Stages</div>
+  <div class="tab" data-tab="links">Links</div>
+  <div class="tab" data-tab="dets">Detectors</div>
+  <div class="tab" data-tab="confs">Confirms</div>
+  <div class="tab" data-tab="matrix">Interstage</div>
+</nav>
+
+<main class="content">
+  <div id="section-datasets" class="section active">
+    <div class="section-title">Datasets <span id="ds-stream-label" style="font-weight:400;color:var(--muted);font-size:11px"></span></div>
+    <div class="upload-zone" id="upload-zone">
+      <div class="upload-icon">⬆</div>
+      <div class="upload-text">Drop .mxds file here or click to browse</div>
+      <div class="upload-hint">.mxds — MOVA M8.0 dataset</div>
+    </div>
+    <input type="file" id="ds-file-input" accept=".mxds">
+    <div class="ds-list" id="ds-list"><div style="color:var(--muted);font-style:italic">Loading…</div></div>
+  </div>
+
+  <div id="loading" style="display:none">Fetching dataset…</div>
+  <div id="error-msg" style="display:none"></div>
+
+  <div id="section-info"   class="section"></div>
+  <div id="section-plans"  class="section"></div>
+  <div id="section-stages" class="section"></div>
+  <div id="section-links"  class="section"></div>
+  <div id="section-dets"   class="section"></div>
+  <div id="section-confs"  class="section"></div>
+  <div id="section-matrix" class="section"></div>
+</main>
+
+<div id="toast-container"></div>
+
+<script>
+'use strict';
+const params = new URLSearchParams(location.search);
+const stream = parseInt(params.get('stream') || '0', 10);
+const API    = location.origin;
+const DAYS   = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const DAY_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+document.getElementById('hdr-sub').textContent = `Stream ${stream + 1}`;
+document.getElementById('ds-stream-label').textContent = `— loading into Stream ${stream + 1}`;
+
+// ── Tab switching ──────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  const sec = document.getElementById('section-' + name);
+  if (sec) sec.classList.add('active');
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function h(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function sectionTitle(t){ return `<div class="section-title">${t}</div>`; }
+function infoCell(label, val){
+  return `<div class="info-cell"><div class="info-label">${label}</div><div class="info-val">${h(val||'—')}</div></div>`;
+}
+function toast(msg, type) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast${type === 'success' ? ' success' : type === 'error' ? ' error' : ''}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 5000);
+}
+
+// ── Dataset management ─────────────────────────────────────────────────────────
+const zone   = document.getElementById('upload-zone');
+const fileIn = document.getElementById('ds-file-input');
+zone.addEventListener('click',    () => fileIn.click());
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop',      e => { e.preventDefault(); zone.classList.remove('dragover'); uploadFile(e.dataTransfer.files[0]); });
+fileIn.addEventListener('change',  e => uploadFile(e.target.files[0]));
+
+async function uploadFile(file) {
+  if (!file) return;
+  zone.querySelector('.upload-text').textContent = `Uploading ${file.name}…`;
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const r = await fetch(`${API}/api/dataset/upload`, {method:'POST', body:fd});
+    const j = await r.json();
+    zone.querySelector('.upload-text').textContent = 'Drop .mxds file here or click to browse';
+    fileIn.value = '';
+    if (j.ok) {
+      toast(`${file.name}: ${(j.loaded||[]).length} stream(s) loaded`, 'success');
+      await loadDsList();
+      await loadViewerData();
+    } else { toast(j.detail || 'Upload failed', 'error'); }
+  } catch(e) {
+    zone.querySelector('.upload-text').textContent = 'Drop .mxds file here or click to browse';
+    toast(`Upload error: ${e.message}`, 'error');
+  }
+}
+
+async function deleteDataset(filename) {
+  if (!confirm(`Delete '${filename}'?`)) return;
+  try {
+    const r = await fetch(`${API}/api/dataset/${encodeURIComponent(filename)}`, {method:'DELETE'});
+    const j = await r.json();
+    if (j.ok) { toast(`Deleted '${filename}'`, 'success'); loadDsList(); }
+    else       { toast(j.detail || 'Delete failed', 'error'); }
+  } catch(e) { toast(`Delete error: ${e.message}`, 'error'); }
+}
+
+let _currentFilename = null;
+
+function buildDsItem(name, ctrlStreams) {
+  const isLoaded = name === _currentFilename;
+  const item = document.createElement('div');
+  item.className = 'ds-item';
+
+  const row = document.createElement('div');
+  row.className = 'ds-item-row';
+
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'ds-name';
+  nameSpan.textContent = name;
+  if (isLoaded) {
+    const badge = document.createElement('span');
+    badge.className = 'loaded-badge';
+    badge.textContent = 'LOADED';
+    nameSpan.appendChild(badge);
+  }
+
+  const loadBtn = document.createElement('button');
+  loadBtn.className = 'ds-btn';
+  loadBtn.innerHTML = 'Load &#x2197;';
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'ds-btn';
+  delBtn.style.cssText = 'border-color:var(--red);color:var(--red)';
+  delBtn.textContent = 'Delete';
+
+  row.append(nameSpan, loadBtn, delBtn);
+  item.appendChild(row);
+
+  const idLine = document.createElement('div');
+  idLine.className = 'ds-idline';
+  idLine.style.color = 'var(--muted)';
+  idLine.textContent = ctrlStreams === null ? '…' : '';
+  item.appendChild(idLine);
+
+  // Load panel
+  const panel = document.createElement('div');
+  panel.className = 'ds-panel';
+  panel.style.display = 'none';
+
+  const panelRow = document.createElement('div');
+  panelRow.className = 'ds-panel-row';
+
+  const selWrap = document.createElement('div');
+  const selLabel = document.createElement('div');
+  selLabel.className = 'ds-label';
+  selLabel.textContent = 'Controller Stream';
+  const sel = document.createElement('select');
+  sel.className = 'ds-select';
+  (ctrlStreams || []).forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.stream_id;
+    opt.textContent = `${s.stream_id}: ${s.title || '(untitled)'}`;
+    sel.appendChild(opt);
+  });
+  selWrap.append(selLabel, sel);
+
+  const doLoadBtn = document.createElement('button');
+  doLoadBtn.className = 'ds-btn';
+  doLoadBtn.style.cssText = 'border-color:var(--green);color:var(--green);padding:5px 14px';
+  doLoadBtn.textContent = `Load into Stream ${stream + 1} →`;
+
+  panelRow.append(selWrap, doLoadBtn);
+  panel.appendChild(panelRow);
+  item.appendChild(panel);
+
+  loadBtn.addEventListener('click', () => {
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  });
+  delBtn.addEventListener('click', () => deleteDataset(name));
+  doLoadBtn.addEventListener('click', async () => {
+    const streamId = sel.value;
+    try {
+      const r = await fetch(`${API}/api/dataset/${stream}/load?filename=${encodeURIComponent(name)}&stream_id=${encodeURIComponent(streamId)}`, {method:'POST'});
+      const j = await r.json();
+      if (j.ok) {
+        toast(`Loaded '${j.header?.title || name}' into Stream ${stream + 1}`, 'success');
+        panel.style.display = 'none';
+        await loadDsList();
+        await loadViewerData();
+        showTab('info');
+      } else { toast(j.detail || 'Load failed', 'error'); }
+    } catch(e) { toast(`Load error: ${e.message}`, 'error'); }
+  });
+
+  item._updateInfo = (ctrlStreams) => {
+    idLine.textContent = '';
+    idLine.innerHTML = ctrlStreams.map(s =>
+      `<span style="color:#2563eb;font-weight:600">${h(s.stream_id)}</span> ${h(s.title||'')}${s.stages?` (${s.stages} stg)`:''}`
+    ).join('  ·  ');
+    ctrlStreams.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.stream_id;
+      opt.textContent = `${s.stream_id}: ${s.title || '(untitled)'}`;
+      sel.appendChild(opt);
+    });
+  };
+
+  return item;
+}
+
+async function loadDsList() {
+  try {
+    const snap = await fetch(`${API}/api/streams/${stream}`).then(r => r.ok ? r.json() : null);
+    _currentFilename = snap?.dataset?.filename || null;
+  } catch(_) {}
+
+  const listEl = document.getElementById('ds-list');
+  try {
+    const r = await fetch(`${API}/api/dataset/`);
+    const j = await r.json();
+    const names = j.datasets || [];
+
+    if (!names.length) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:8px 0">No datasets uploaded yet.</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    const items = names.map(name => {
+      const item = buildDsItem(name, null);
+      listEl.appendChild(item);
+      return item;
+    });
+
+    names.forEach((name, idx) => {
+      fetch(`${API}/api/dataset/info/${encodeURIComponent(name)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(info => {
+          if (!info) { items[idx]._updateInfo([]); return; }
+          const ctrlStreams = Object.values(info.streams || {});
+          items[idx]._updateInfo(ctrlStreams);
+        })
+        .catch(() => items[idx]._updateInfo([]));
+    });
+
+  } catch(e) {
+    listEl.innerHTML = `<div style="color:var(--red)">Failed to load dataset list: ${h(e.message)}</div>`;
+  }
+}
+
+// ── Dataset viewer ─────────────────────────────────────────────────────────────
+function renderViewer(d) {
+  document.getElementById('loading').style.display = 'none';
+  const inf = d.info || {};
+  document.getElementById('hdr-sub').textContent = `Stream ${stream + 1}  ·  ${d.filename}  ·  ${inf.name || ''}`;
+  renderInfo(d); renderPlans(d); renderStages(d); renderLinks(d);
+  renderDets(d); renderConfs(d); renderMatrix(d);
+}
+
+function renderInfo(d) {
+  const inf = d.info || {};
+  document.getElementById('section-info').innerHTML = sectionTitle('Controller Details') +
+    `<div class="info-grid">
+      ${infoCell('ID',          inf.id)}
+      ${infoCell('Name',        inf.name||inf.description)}
+      ${infoCell('MOVA Version',inf.mova_version)}
+      ${infoCell('MDS Filename',inf.mds_filename)}
+      ${infoCell('Stages',      inf.stages)}
+      ${infoCell('Links',       inf.links)}
+      ${infoCell('Lanes',       inf.lanes)}
+      ${infoCell('Detectors',   inf.dets)}
+      ${infoCell('Main Stage [MAINST]',   inf.main_stage||'0')}
+      ${infoCell('Total Green [TOTALG]s', inf.total_green)}
+      ${infoCell('Scan Period [SCAN]s',   inf.scan)}
+      ${infoCell('Min Extension',inf.min_ext)}
+      ${infoCell('Max Extension',inf.max_ext)}
+      ${infoCell('Detector ON',  inf.detector_on)}
+      ${infoCell('Stage Confirm ON', inf.stage_conf_on)}
+      ${infoCell('Phase Confirm ON', inf.phase_conf_on)}
+      ${infoCell('Stage Demand ON',  inf.stage_dem_on)}
+    </div>`;
+}
+
+function renderPlans(d) {
+  const el    = document.getElementById('section-plans');
+  const plans = d.plans || [];
+  if (!plans.length) {
+    el.innerHTML = sectionTitle('Data Plans') + '<p style="color:var(--muted);padding:8px">No plan timetable data found in dataset.</p>';
+    return;
+  }
+  let html = sectionTitle(`Data Plans &amp; Timetable  <span style="font-weight:400;color:var(--muted);font-size:11px">(${plans.length} plan${plans.length>1?'s':''})</span>`);
+  plans.forEach(p => {
+    const revBadge  = p.reversionary ? '<span class="plan-rev">REVERSIONARY</span>' : '';
+    const trigBadge = p.trigger_det  ? `<span class="plan-trig">Trigger Det ${p.trigger_det}</span>` : '';
+    html += `<div class="plan-card"><div class="plan-hdr">
+      <span class="plan-num">Plan ${p.plan_num}</span>
+      <span class="plan-name">${h(p.name||'(untitled)')}</span>
+      ${revBadge} ${trigBadge}
+    </div>`;
+    if (p.schedule.length) {
+      p.schedule.forEach(s => {
+        const dayPills = DAYS.map((d,i) =>
+          `<span class="day ${s.days.includes(d)?'day-on':'day-off'}">${DAY_SHORT[i]}</span>`).join('');
+        const rev = s.reversionary ? ' <span style="font-size:10px;color:var(--amber)">(rev)</span>' : '';
+        html += `<div class="sched-row">
+          <span class="sched-time">${h(s.start)} – ${h(s.end)}${rev}</span>
+          <div class="day-pills">${dayPills}</div>
+          ${s.name ? `<span style="color:var(--muted);font-size:11px">${h(s.name)}</span>` : ''}
+        </div>`;
+      });
+    } else {
+      html += `<div style="color:var(--muted);font-size:11px">No schedule entries</div>`;
+    }
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderStages(d) {
+  const stages = d.stages || [];
+  let rows = stages.map(s =>
+    `<tr>
+      <td class="cell-key cell-num">${s.id}</td>
+      <td>${h(s.phases)}</td>
+      <td class="cell-num">${s.min_green}</td>
+      <td class="cell-num">${s.max_green}</td>
+      <td class="cell-num">${s.is_ped ? '✓' : ''}</td>
+      <td style="font-family:var(--mono);font-size:11px">${s.links.join(', ')||'—'}</td>
+    </tr>`).join('');
+  document.getElementById('section-stages').innerHTML = sectionTitle('Stages') +
+    `<table><thead><tr>
+      <th>Stage</th><th>Phases</th><th>Min Green (s)</th><th>Max Green (s)</th><th>Ped</th><th>Running Links</th>
+    </tr></thead><tbody>${rows}</tbody></table>` + renderPhasesTable(d);
+}
+
+function renderPhasesTable(d) {
+  const phases = d.phases || [];
+  if (!phases.length) return '';
+  let rows = phases.map(p =>
+    `<tr>
+      <td class="cell-key cell-num">${h(p.id)}</td>
+      <td>${h(p.type)}</td>
+      <td class="cell-num">${p.min_green}</td>
+      <td>${h(p.interstage||'')}</td>
+      <td class="cell-num">${p.confirm_ch||'—'}</td>
+    </tr>`).join('');
+  return `<div class="section-title" style="margin-top:16px">Phases</div>
+    <table><thead><tr>
+      <th>Phase</th><th>Type</th><th>Min Green (s)</th><th>Interstage Behaviour</th><th>Confirm Ch</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderLinks(d) {
+  const links = d.links || [];
+  let rows = links.map(lk =>
+    `<tr>
+      <td class="cell-key cell-num">${lk.id}</td>
+      <td class="cell-num">${h(lk.phase)}</td>
+      <td>${h(lk.type)}</td>
+      <td class="cell-num">${lk.dem_ch||'—'}</td>
+      <td class="cell-num">${lk.n_lanes}</td>
+      <td class="cell-num">${lk.latched?'✓':''}</td>
+      <td class="cell-num">${lk.minmin||''}</td>
+      <td class="cell-num">${lk.maxmin||''}</td>
+      <td class="cell-num">${lk.bontim||''}</td>
+      <td class="cell-num">${lk.bonmax||''}</td>
+      <td>${lk.is_ep?'<span class="ep-badge">EP</span>':''}</td>
+    </tr>`).join('');
+  document.getElementById('section-links').innerHTML = sectionTitle('Links') +
+    `<table><thead><tr>
+      <th>Link</th><th>Phase</th><th>Type</th><th>Dem Ch</th><th>Lanes</th>
+      <th>Latched</th><th>MINMIN</th><th>MAXMIN</th><th>BONTIM</th><th>BONMAX</th><th>EP</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderDets(d) {
+  const dets = d.detectors || [];
+  let rows = dets.map(det =>
+    `<tr>
+      <td class="cell-key cell-num">${det.id}</td>
+      <td>${h(det.type)}</td>
+      <td class="cell-num">${det.link||'—'}</td>
+      <td class="cell-num">${det.lane||'—'}</td>
+      <td class="cell-num">${det.distance||''}</td>
+    </tr>`).join('');
+  document.getElementById('section-dets').innerHTML = sectionTitle('Detectors') +
+    `<table><thead><tr>
+      <th>Det</th><th>Type</th><th>Link</th><th>Lane</th><th>Distance (m)</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderConfs(d) {
+  const confs = d.confirms || [];
+  let rows = confs.map(c =>
+    `<tr>
+      <td class="cell-key cell-num">${c.id}</td>
+      <td class="cell-num">${c.stage}</td>
+      <td class="cell-num">${c.phase||'—'}</td>
+    </tr>`).join('');
+  document.getElementById('section-confs').innerHTML = sectionTitle('Confirms') +
+    `<table><thead><tr>
+      <th>Confirm</th><th>Stage</th><th>Phase</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderMatrix(d) {
+  const el     = document.getElementById('section-matrix');
+  const matrix = d.matrix || [];
+  const stages = d.stages || [];
+  if (!stages.length) { el.innerHTML = sectionTitle('Interstage Matrix') + '<p style="color:var(--muted)">No stage data.</p>'; return; }
+  const ids = stages.map(s => s.id);
+  const lut = {};
+  matrix.forEach(m => { if (!lut[m.from]) lut[m.from] = {}; lut[m.from][m.to] = m.val; });
+  let hdr  = '<tr><th></th>' + ids.map(id => `<th>${id}</th>`).join('') + '</tr>';
+  let rows = ids.map(fr =>
+    '<tr><th>' + fr + '</th>' +
+    ids.map(to => {
+      if (fr === to) return '<td class="mat-self">—</td>';
+      const v = lut[fr] && lut[fr][to] != null ? lut[fr][to] : null;
+      return v === null ? '<td></td>' : `<td class="mat-val cell-num">${v}s</td>`;
+    }).join('') + '</tr>').join('');
+  el.innerHTML = sectionTitle('Stage Interstage Matrix') +
+    '<div class="matrix-wrap"><table><thead>' + hdr + '</thead><tbody>' + rows + '</tbody></table></div>' +
+    '<p style="font-size:11px;color:var(--muted);margin-top:4px">Values in seconds. Empty = not applicable / banned move.</p>';
+}
+
+async function loadViewerData() {
+  try {
+    const [det, snap] = await Promise.all([
+      fetch(`${API}/api/dataset/detail/${stream}`).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); }),
+      fetch(`${API}/api/streams/`).then(r => r.json()).catch(() => null),
+    ]);
+    if (snap) {
+      const s = (snap.streams || {})[String(stream)];
+      if (s && s.kernel_version) document.getElementById('hdr-kver').textContent = 'Kernel ' + s.kernel_version;
+    }
+    renderViewer(det);
+    return true;
+  } catch(_) {
+    return false;
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+(async () => {
+  const [, hasDataset] = await Promise.all([loadDsList(), loadViewerData()]);
+  if (hasDataset) showTab('info');
+})();
+</script>
+</body>
+</html>
