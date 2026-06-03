@@ -1,5 +1,6 @@
 # UG405 REST routes — web process.
 
+import asyncio
 import logging
 import os
 
@@ -22,7 +23,8 @@ def set_client(c):
 async def ping():
     if _client is None:
         raise HTTPException(503, "ug405 client not initialised")
-    ack = _client.send_command("PING")
+    loop = asyncio.get_event_loop()
+    ack = await loop.run_in_executor(None, _client.send_command, "PING")
     if ack is None:
         raise HTTPException(503, "ug405 not responding")
     return ack
