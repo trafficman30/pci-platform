@@ -960,7 +960,7 @@ is_dim = (now >= dim_utc) OR (now < bright_utc)
      dataset, derived, analysis, messages, errors, history,
      satflow, tma, syslog  ✓ COMPLETE
 7.4  Main dashboard index.html                          ✓ COMPLETE
-7.5  Service pages — ug405, rtig, autodim, offline, agd, flir
+7.5  Service pages — ug405, rtig, autodim, offline, agd, flir  ✓ COMPLETE
 ```
 
 ### Phase 7.6 — MOVA Tools AML connection  ← GATE for Phase 8
