@@ -957,7 +957,8 @@ is_dim = (now >= dim_utc) OR (now < bright_utc)
 7.1  Build design.html — extract CSS from CM5 + MOVA, resolve conflicts
 7.2  css/pci.css — single unified stylesheet, all services
 7.3  Port MOVA popup pages from /opt/MOVA/static/
-     dataset, derived, analysis, messages, errors, history
+     dataset, derived, analysis, messages, errors, history,
+     satflow, tma, syslog  ✓ COMPLETE
 7.4  Main dashboard index.html
 7.5  Service pages — ug405, rtig, autodim, offline, agd, flir
 ```

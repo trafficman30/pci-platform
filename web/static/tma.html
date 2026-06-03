@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOVA TMA Log</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* height:100vh required — flex scroll layout
+       breaks with pci.css min-height:100vh */
+    body { height: 100vh; }
+
+    /* popup header overrides */
+    .logo-mark    { width: 24px; height: 24px; }
+    .logo-text    { font-size: 14px; letter-spacing: 0; }
+    header        { justify-content: space-between; padding: 0 20px; }
+    .hdr-right    { display: flex; align-items: center; gap: 12px; }
+    .stream-label { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.55); }
+
+    .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .scroll  { flex: 1; overflow-y: auto; padding: 16px; }
+
+    table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+    thead th {
+      text-align: left; font-size: 9px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--muted); padding: 5px 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg3); position: sticky; top: 0;
+    }
+    tbody tr              { border-bottom: 1px solid var(--border); }
+    tbody tr:hover        { background: var(--bg3); }
+    tbody td              { padding: 5px 8px; vertical-align: top; }
+
+    .stage-badge  { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: 10px; background: #dbeafe; color: #1e40af; }
+    .empty        { color: var(--muted); font-family: var(--mono); font-size: 11px; padding: 20px; text-align: center; }
+    .flow-val     { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+    .green-dur    { color: var(--green); font-weight: 600; }
+    .green-dur.short { color: var(--amber); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-mark"></div>
+      <span class="logo-text">MOVA TMA Log</span>
+    </div>
+    <div class="hdr-right">
+      <span class="stream-label" id="stream-label">Stream —</span>
+      <div class="conn-dot" id="conn-dot"></div>
+    </div>
+  </header>
+
+  <div class="content">
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:70px">Time</th>
+            <th style="width:55px">Stage</th>
+            <th style="width:65px" title="Actual measured green time: time from this stage start to next stage start">Green (s)</th>
+            <th style="width:70px" title="Smoothed cycle time from type 1/2 message (SMCYC)">Cycle (s)</th>
+            <th>Lane Flows (veh/hr)</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const params   = new URLSearchParams(location.search);
+    const streamId = parseInt(params.get('stream') || '0', 10);
+    document.getElementById('stream-label').textContent = `Stream ${streamId+1}`;
+    document.title = `MOVA TMA — Stream ${streamId+1}`;
+
+    const dot   = document.getElementById('conn-dot');
+    const tbody = document.getElementById('tbody');
+    const MAX_ROWS = 500;
+
+    // Dataset dimensions — fetched once from stream snapshot on open
+    let noLanes = 0;  // 0 = unknown; parse until first zero (old fallback)
+    fetch(`/api/streams/${streamId}`)
+      .then(r => r.json())
+      .then(d => { noLanes = (d.derived || {}).no_lanes || 0; })
+      .catch(() => {});
+
+    // Ring buffers of all received type 1/1 and 1/2 messages (newest-first after insertion)
+    const buf11 = [];  // { ts, stage, hh, mm, ss, flows, seq }
+    const buf12 = [];  // { ts, cycle_tenths, seq }
+
+    function fmtTime(hh, mm, ss) {
+      return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+    }
+
+    // Find the type 1/2 message whose ts is closest to a given ts, within 1 second.
+    // Returns cycle_tenths or null.
+    function cycleLookup(ts) {
+      let best = null, bestDiff = 1.0;
+      for (const m of buf12) {
+        const d = Math.abs(m.ts - ts);
+        if (d < bestDiff) { bestDiff = d; best = m; }
+        if (m.ts < ts - 1.0) break;  // buf12 newest-first; stop early once too old
+      }
+      return best ? best.cycle_tenths : null;
+    }
+
+    // Rebuild the entire tbody from buf11 (newest-first).
+    // green[i] = buf11[i].ts - buf11[i+1].ts (newer minus older)
+    function rebuild() {
+      tbody.innerHTML = '';
+      const max = Math.min(buf11.length, MAX_ROWS);
+      for (let i = 0; i < max; i++) {
+        const m    = buf11[i];
+        const next = buf11[i + 1];  // older entry = end of this green
+        const cyc  = cycleLookup(m.ts);
+
+        const greenS   = next ? (m.ts - next.ts) : null;
+        const greenStr = greenS != null
+          ? greenS.toFixed(1) + 's'
+          : (i === 0 ? '…' : '—');
+        const greenCls = greenS != null && greenS < 3.0 ? 'short' : '';
+
+        const cycStr = cyc != null ? (cyc / 10).toFixed(1) + 's' : '—';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${fmtTime(m.hh, m.mm, m.ss)}</td>
+          <td><span class="stage-badge">Stg ${m.stage}</span></td>
+          <td><span class="green-dur ${greenCls}">${greenStr}</span></td>
+          <td>${cycStr}</td>
+          <td>${m.flows.map((f,j)=>`<span class="flow-val">L${j+1}:${f}</span>`).join(' ')}</td>`;
+        tbody.appendChild(tr);
+      }
+      if (!buf11.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">Waiting for stage-start messages…</td></tr>';
+      }
+    }
+
+    function handleMessages(messages) {
+      let changed = false;
+      for (const m of messages) {
+        const raw = m.raw || [];
+
+        if (m.type === 1 && m.sub === 1) {
+          // Start of green: [2]=stage [3]=HH [4]=MM [5]=SS [6..]=lane flows
+          const stage = raw[2] || 0;
+          const hh = raw[3]||0, mm = raw[4]||0, ss = raw[5]||0;
+          const flows = [];
+          const laneCount = noLanes || raw.length;
+          for (let i = 6; i < 6 + laneCount && i < raw.length; i++) {
+            flows.push(raw[i] || 0);
+          }
+          buf11.unshift({ ts: m.ts, stage, hh, mm, ss, flows, seq: m.seq });
+          if (buf11.length > MAX_ROWS + 50) buf11.splice(MAX_ROWS + 50);
+          changed = true;
+        }
+
+        if (m.type === 1 && m.sub === 2) {
+          // Cycle data: [2]=cycle_time (tenths-s), [3..]=drift_max per stage
+          const cycle_tenths = raw[2] || 0;
+          buf12.unshift({ ts: m.ts, cycle_tenths, seq: m.seq });
+          if (buf12.length > 200) buf12.splice(200);
+          // Don't force rebuild on 1/2 alone — wait for next 1/1
+        }
+      }
+      if (changed) rebuild();
+    }
+
+    // ── Messages WebSocket ────────────────────────────────────────────────────
+    function connect() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws/messages/${streamId}`);
+      ws.onopen    = () => dot.className = 'conn-dot live';
+      ws.onmessage = ev => {
+        try {
+          const d = JSON.parse(ev.data);
+          if (d.messages && d.messages.length) handleMessages(d.messages);
+        } catch(e) {}
+      };
+      ws.onclose = () => { dot.className = 'conn-dot error'; setTimeout(connect, 3000); };
+      ws.onerror = () => ws.close();
+    }
+    connect();
+
+    // Detector counts moved to History viewer — Det Counts tab
+    function renderCounts(data) {
+      const counts  = data.tma_counts    || {};
+      const n       = data.no_lanes      || 0;
+      const hasBoth = data.lane_has_both || [];
+      const xflow   = counts.xflow       || [];
+      const inflow  = counts.inflow      || [];
+      const xsus    = counts.xsuspect    || [];
+      const insus   = counts.insuspect   || [];
+      const pstart  = counts.period_start || 0;
+      const psec    = counts.period_sec   || 0;
+
+      if (pstart) {
+        const elapsed = Math.round(Date.now()/1000 - pstart);
+        const pmin    = psec ? Math.round(psec/60) : '?';
+        document.getElementById('period-info').textContent =
+          ` — ${pmin}-min period, ${Math.max(0,elapsed)}s elapsed`;
+      }
+
+      if (!n) {
+        document.getElementById('count-grid').innerHTML =
+          '<span style="color:var(--muted);font-size:11px">No dataset loaded</span>';
+        return;
+      }
+
+      const grid = document.getElementById('count-grid');
+      grid.innerHTML = '';
+
+      for (let i = 0; i < n; i++) {
+        const inV  = inflow[i] || 0;
+        const xV   = xflow[i]  || 0;
+        const xs   = xsus[i]   || 0;
+        const is_  = insus[i]  || 0;
+        const both = hasBoth[i] || false;
+
+        let cls = '', note = '';
+        if (xs > 0 || is_ > 0) {
+          cls  = 'alert';
+          note = xs > 0
+            ? (xs === 1 ? '⚠ X stuck-on' : '⚠ X stuck-off')
+            : (is_ === 1 ? '⚠ IN stuck-on' : '⚠ IN stuck-off');
+        } else if (both && inV > 0 && xV > 0) {
+          const delta = Math.abs(inV - xV) / Math.max(inV, xV);
+          if (delta > 0.20) { cls = 'warn'; note = `IN/X count out by ${Math.round(delta*100)}%`; }
+        }
+
+        const deltaStr = both && (inV > 0 || xV > 0)
+          ? `${Math.round(Math.abs(inV-xV)/Math.max(inV,xV,1)*100)}%Δ`
+          : (both ? '—' : '');
+
+        const cell = document.createElement('div');
+        cell.className = `count-cell ${cls}`;
+        cell.title = both
+          ? `Lane ${i+1} — IN: ${inV}  X: ${xV}${note ? '  ' + note : ''}`
+          : `Lane ${i+1} — X: ${xV} (no IN detector)`;
+        cell.innerHTML = `
+          <div class="count-lane">L${i+1}${cls === 'alert' ? ' ⚠' : ''}</div>
+          <div class="count-vals">
+            ${both
+              ? `<span class="count-in">${inV}</span>
+                 <span style="color:var(--border);font-size:10px">/</span>
+                 <span class="count-x">${xV}</span>`
+              : `<span class="count-x">${xV}</span>`
+            }
+          </div>
+          <div class="count-ratio">${deltaStr}</div>`;
+        grid.appendChild(cell);
+      }
+    }
+
+    function connectCounts() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws/tma/${streamId}`);
+      ws.onmessage = ev => { try { renderCounts(JSON.parse(ev.data)); } catch(e) {} };
+      ws.onclose   = () => setTimeout(connectCounts, 3000);
+      ws.onerror   = () => ws.close();
+    }
+    connectCounts();
+  </script>
+</body>
+</html>

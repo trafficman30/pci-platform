@@ -572,9 +572,9 @@ Each now calls `from pci.shared.log import setup; setup('pci.xxx')`.
 
 ---
 
-## 2026-06-03 — Phase 7.3 in progress
+## 2026-06-03 — Phase 7.3 complete
 
-### Phase 7.3 — Port MOVA popup pages  ⧖ IN PROGRESS
+### Phase 7.3 — Port MOVA popup pages  ✓ COMPLETE
 
 **Pages to port (order):**
 dataset.html, derived.html, messages.html, errors.html,
@@ -606,7 +606,7 @@ all /api/dataset/* and /api/streams/* paths unchanged.
 
 ## 2026-06-03 — Phase 7.3 continued
 
-### Phase 7.3 — Port MOVA popup pages (session 2)  ⧖ IN PROGRESS
+### Phase 7.3 — Port MOVA popup pages (session 2)
 
 **Pages completed this session:**
 - `web/static/errors.html` — faults popup, WebSocket `/ws/errors/{streamId}`, active faults + history table
@@ -620,12 +620,23 @@ all /api/dataset/* and /api/streams/* paths unchanged.
 - Conflict comments added where page-specific classes override pci.css rules (`.section-title`, `.badge`)
 - All page-specific component styles kept inline
 
-**Porting notes saved to PORTING_NOTES.md for next session:**
-- `satflow.html` — small scrollable page, no height override, `.section-title` conflict
-- `tma.html` — flex popup, dead `renderCounts` JS (no DOM target), leave as-is
-- `syslog.html` — **dark theme**: keep `:root` inline to override pci.css light tokens
+### Phase 7.3 — Port MOVA popup pages (session 3)
+
+**Pages completed this session:**
+- `web/static/satflow.html` — scrollable page (no `height:100vh`), WebSocket `/ws/derived/{streamId}`.
+  Lane cards with sat/high state variants, optimiser status panel.
+  `.section-title` conflict: overrides pci.css `font-size:11px` → `9px` with comment.
+- `web/static/tma.html` — flex scroll popup, WebSocket `/ws/messages/{streamId}`.
+  Stage-start log table with computed green duration and cycle time lookup.
+  `renderCounts`/`connectCounts` dead code left in place — references `count-grid`/`period-info`
+  DOM elements that do not exist; DOM target was moved to History viewer in a prior session.
+- `web/static/syslog.html` — **dark theme**: `:root` block kept inline to override pci.css
+  light-theme tokens. Polls `GET /api/system/log?lines=N&level=X` every 3s (no WebSocket).
+  Follow/pause on scroll, search filter, level filter, line count selector.
+
+**All 9 popup pages ported:**
+dataset, derived, messages, errors, history, analysis, satflow, tma, syslog.
 
 **Outstanding:**
-- `satflow.html`, `tma.html`, `syslog.html` — notes ready, write next session
 - Phase 7.4: dashboard index.html
-- Phase 7.5: service pages
+- Phase 7.5: service pages (ug405, rtig, autodim, offline, agd, flir)

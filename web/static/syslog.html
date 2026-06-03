@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOVA System Log</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* Dark theme — :root kept inline to override pci.css light-theme tokens */
+    :root {
+      --bg: #0d1117; --bg2: #161b22; --border: #30363d;
+      --topbar: #1a2744; --accent: #00d4ff;
+      --green: #3fb950; --amber: #d29922; --red: #f85149; --blue: #58a6ff;
+      --text: #e6edf3; --muted: #8b949e;
+    }
+
+    /* height:100vh required — flex scroll layout
+       breaks with pci.css min-height:100vh */
+    body { height: 100vh; }
+
+    /* popup header overrides */
+    .logo-mark { width: 20px; height: 20px; }
+    .logo-text  { font-size: 14px; letter-spacing: 0; }
+
+    .hdr-sep      { width: 1px; height: 20px; background: rgba(255,255,255,.2); flex-shrink: 0; }
+    .hdr-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+    select, input[type=text] {
+      background: #253a5e; border: 1px solid rgba(255,255,255,.2);
+      color: #fff; font-family: var(--mono); font-size: 11px;
+      padding: 3px 7px; border-radius: 3px; height: 26px;
+    }
+    .btn {
+      background: rgba(255,255,255,.12); color: #fff;
+      border: 1px solid rgba(255,255,255,.25); border-radius: 3px;
+      padding: 4px 10px; font-size: 11px; cursor: pointer; height: 26px;
+    }
+    .btn:hover  { background: rgba(255,255,255,.2); }
+    .btn.active { background: var(--accent); border-color: var(--accent); color: #000; }
+
+    #status { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.5); }
+
+    .log-area {
+      flex: 1; overflow-y: auto; padding: 8px 12px;
+      font-family: var(--mono); font-size: 11px; line-height: 1.55;
+    }
+    .log-area::-webkit-scrollbar       { width: 6px; }
+    .log-area::-webkit-scrollbar-track { background: var(--bg); }
+    .log-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .line         { white-space: pre-wrap; word-break: break-all; padding: 1px 0; }
+    .line.ERROR   { color: var(--red); }
+    .line.WARNING { color: var(--amber); }
+    .line.INFO    { color: var(--text); }
+    .line.DEBUG   { color: var(--muted); }
+
+    .ts          { color: var(--muted); }
+    .lvl-ERROR   { color: var(--red);   font-weight: 700; }
+    .lvl-WARNING { color: var(--amber); font-weight: 700; }
+    .lvl-INFO    { color: var(--blue); }
+    .lvl-DEBUG   { color: var(--muted); }
+    .mod         { color: #7ee787; }
+    .msg-ERROR   { color: var(--red); }
+    .msg-WARNING { color: var(--amber); }
+    .msg-INFO    {}
+
+    .empty { color: var(--muted); font-style: italic; padding: 20px; text-align: center; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <span class="logo-text">System Log</span>
+  </div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-controls">
+    <select id="level-sel" title="Filter by level">
+      <option value="">All levels</option>
+      <option value="DEBUG">DEBUG only</option>
+      <option value="INFO">INFO only</option>
+      <option value="WARNING">WARNING only</option>
+      <option value="ERROR">ERROR only</option>
+    </select>
+    <input type="text" id="search" placeholder="Search…" style="width:160px" title="Filter lines containing text">
+    <select id="lines-sel" title="Lines to show">
+      <option value="100">100 lines</option>
+      <option value="200" selected>200 lines</option>
+      <option value="500">500 lines</option>
+      <option value="1000">1000 lines</option>
+    </select>
+    <button class="btn active" id="follow-btn" title="Auto-scroll to newest">Follow</button>
+    <button class="btn" id="refresh-btn" title="Refresh now">Refresh</button>
+    <span id="status">—</span>
+  </div>
+</header>
+<div class="log-area" id="log"></div>
+
+<script>
+'use strict';
+let following = true;
+let lastLines = 0;
+
+const logEl     = document.getElementById('log');
+const statusEl  = document.getElementById('status');
+const followBtn = document.getElementById('follow-btn');
+const levelSel  = document.getElementById('level-sel');
+const linesSel  = document.getElementById('lines-sel');
+const searchEl  = document.getElementById('search');
+
+// ─── Fetch and render ─────────────────────────────────────────────────────────
+async function refresh() {
+  const level  = levelSel.value;
+  const nlines = linesSel.value;
+  let url = `/api/system/log?lines=${nlines}`;
+  if (level) url += `&level=${level}`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) { statusEl.textContent = `HTTP ${resp.status}`; return; }
+    const data = await resp.json();
+    if (data.error) { statusEl.textContent = data.error; return; }
+
+    const search = searchEl.value.toLowerCase();
+    const lines  = data.lines.filter(l => !search || l.toLowerCase().includes(search));
+
+    // Only re-render if content changed (avoids scroll-jump on follow)
+    if (lines.length === lastLines && logEl.children.length > 0 && !search) {
+      const last = logEl.lastElementChild;
+      if (last && last.dataset.raw === lines[lines.length - 1]) {
+        statusEl.textContent = `${data.total} total · up to date`;
+        return;
+      }
+    }
+    lastLines = lines.length;
+
+    logEl.innerHTML = '';
+    if (!lines.length) {
+      logEl.innerHTML = '<div class="empty">No log entries match the current filter.</div>';
+      statusEl.textContent = 'empty';
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    for (const raw of lines) {
+      frag.appendChild(renderLine(raw));
+    }
+    logEl.appendChild(frag);
+
+    statusEl.textContent = `${data.total} total · showing ${lines.length} · ${new Date().toTimeString().slice(0,8)}`;
+
+    if (following) logEl.scrollTop = logEl.scrollHeight;
+  } catch(e) {
+    statusEl.textContent = `Error: ${e.message}`;
+  }
+}
+
+// ─── Parse and colour a log line ──────────────────────────────────────────────
+function renderLine(raw) {
+  const div = document.createElement('div');
+  div.dataset.raw = raw;
+
+  // Format: "2026-05-28 23:30:36  LEVEL  module.name  message"
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(\w+)\s+(\S+)\s+(.*)$/);
+  if (m) {
+    const [, ts, lvl, mod, msg] = m;
+    div.className = `line ${lvl}`;
+    div.innerHTML =
+      `<span class="ts">${ts}</span>  ` +
+      `<span class="lvl-${lvl}">${lvl.padEnd(8)}</span>  ` +
+      `<span class="mod">${mod}</span>  ` +
+      `<span class="msg-${lvl}">${escHtml(msg)}</span>`;
+  } else {
+    div.className = 'line';
+    div.textContent = raw;
+  }
+  return div;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Controls ─────────────────────────────────────────────────────────────────
+followBtn.addEventListener('click', () => {
+  following = !following;
+  followBtn.classList.toggle('active', following);
+  if (following) logEl.scrollTop = logEl.scrollHeight;
+});
+
+document.getElementById('refresh-btn').addEventListener('click', refresh);
+
+levelSel.addEventListener('change', () => { lastLines = 0; refresh(); });
+linesSel.addEventListener('change', () => { lastLines = 0; refresh(); });
+searchEl.addEventListener('input',  () => refresh());
+
+// Pause follow on manual scroll up
+logEl.addEventListener('scroll', () => {
+  const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+  if (!atBottom && following) {
+    following = false;
+    followBtn.classList.remove('active');
+  }
+});
+
+// ─── Auto-refresh every 3s ────────────────────────────────────────────────────
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

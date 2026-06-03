@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOVA Sat Flow</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* popup header overrides */
+    .logo-mark { width: 24px; height: 24px; }
+    .logo-text  { font-size: 14px; letter-spacing: 0; }
+    header { justify-content: space-between; padding: 0 20px; position: sticky; top: 0; z-index: 10; }
+    .hdr-right    { display: flex; align-items: center; gap: 12px; }
+    .stream-label { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.55); }
+
+    .content { flex: 1; padding: 20px; }
+
+    /* pci.css .section-title: font-size:11px — override for compact mono label */
+    .section-title {
+      font-family: var(--mono); font-size: 9px; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 10px;
+    }
+
+    .cards    { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; }
+    .lane-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; min-width: 120px; }
+    .lane-card.sat  { border-color: #fcd34d; background: #fef3c7; }
+    .lane-card.high { border-color: #fca5a5; background: #fee2e2; }
+
+    .lane-num { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+    .lane-card.sat  .lane-num,
+    .lane-card.high .lane-num { color: #92400e; }
+
+    .lane-flow { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--text); }
+    .lane-card.sat  .lane-flow { color: #92400e; }
+    .lane-card.high .lane-flow { color: #991b1b; }
+
+    .lane-unit { font-family: var(--mono); font-size: 9px; color: var(--muted); }
+
+    .flow-bar      { height: 4px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .flow-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width .5s; }
+    .lane-card.sat  .flow-bar-fill { background: #f59e0b; }
+    .lane-card.high .flow-bar-fill { background: #ef4444; }
+
+    .optimiser { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin-bottom: 24px; }
+    .opt-grid  { display: flex; gap: 24px; flex-wrap: wrap; }
+    .opt-item label { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; display: block; margin-bottom: 2px; }
+    .opt-item span  { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--text); }
+
+    .empty   { color: var(--muted); font-family: var(--mono); font-size: 11px; padding: 20px; }
+    .updated { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-mark"></div>
+      <span class="logo-text">MOVA Sat Flow</span>
+    </div>
+    <div class="hdr-right">
+      <span class="stream-label" id="stream-label">Stream —</span>
+      <div class="conn-dot" id="conn-dot"></div>
+    </div>
+  </header>
+
+  <div class="content">
+    <div class="section-title">Optimiser Status</div>
+    <div class="optimiser" id="optimiser"><span class="empty">Waiting for data…</span></div>
+
+    <div class="section-title">Lane Smoothed Flow (veh/hr)</div>
+    <div class="updated" id="updated"></div>
+    <div class="cards" id="lane-cards"><span class="empty">Waiting for stage start messages…</span></div>
+  </div>
+
+  <script>
+    const params   = new URLSearchParams(location.search);
+    const streamId = parseInt(params.get('stream') || '0', 10);
+    document.getElementById('stream-label').textContent = `Stream ${streamId+1}`;
+    document.title = `MOVA Sat Flow — Stream ${streamId+1}`;
+
+    const dot = document.getElementById('conn-dot');
+
+    function renderLanes(d) {
+      const el      = document.getElementById('lane-cards');
+      const noLanes = d.no_lanes || 0;
+      const flows   = d.smoothed_flow || [];
+      const sats    = d.lane_sat      || [];
+      const thresh  = d.flow_threshold || 800;
+
+      if (!noLanes) { el.innerHTML = '<span class="empty">No lane data yet</span>'; return; }
+
+      const visible = flows.slice(0, noLanes);
+      if (!visible.length) { el.innerHTML = '<span class="empty">No lane flow data yet</span>'; return; }
+
+      const max = Math.max(...visible, 1);
+      el.innerHTML = visible.map((f, i) => {
+        const sat = sats[i] || 0;
+        const hi  = f > thresh;
+        const cls = hi ? 'high' : sat ? 'sat' : '';
+        const tag = sat ? ' SAT' : hi ? ' HIGH' : '';
+        return `<div class="lane-card ${cls}" title="Lane ${i+1}: ${f} veh/hr${tag}">
+          <div class="lane-num">Lane ${i+1}${tag}</div>
+          <div class="lane-flow">${f}</div>
+          <div class="lane-unit">veh/hr</div>
+          <div class="flow-bar"><div class="flow-bar-fill" style="width:${Math.round(f/max*100)}%"></div></div>
+        </div>`;
+      }).join('');
+      document.getElementById('updated').textContent = `Updated ${new Date().toTimeString().slice(0,8)}`;
+    }
+
+    function renderOptimiser(d) {
+      const el  = document.getElementById('optimiser');
+      const ben = d.benefit || 0;
+      const dis = d.disbenefit || 0;
+      const pr  = d.predicted_red || 0;
+      if (!ben && !dis && !pr) { el.innerHTML = '<span class="empty">Waiting for optimiser message…</span>'; return; }
+      el.innerHTML = `<div class="opt-grid">
+        <div class="opt-item"><label>Benefit</label><span>${ben}</span></div>
+        <div class="opt-item"><label>Disbenefit</label><span>${dis}</span></div>
+        <div class="opt-item"><label>Pred. Red (s)</label><span>${pr}</span></div>
+        <div class="opt-item"><label>Cycle Time</label><span>${d.cycle_time ? d.cycle_time+'s' : '—'}</span></div>
+        <div class="opt-item"><label>Jcn Flow</label><span>${d.junction_flow||0}</span></div>
+      </div>`;
+    }
+
+    function connect() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws/derived/${streamId}`);
+      ws.onopen    = () => dot.className = 'conn-dot live';
+      ws.onmessage = ev => {
+        try {
+          const data = JSON.parse(ev.data);
+          const d = data.derived || {};
+          renderLanes(d);
+          renderOptimiser(d);
+        } catch(e) {}
+      };
+      ws.onclose = () => { dot.className = 'conn-dot error'; setTimeout(connect, 3000); };
+      ws.onerror = () => ws.close();
+    }
+    connect();
+  </script>
+</body>
+</html>
