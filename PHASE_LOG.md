@@ -539,3 +539,33 @@ Each now calls `from pci.shared.log import setup; setup('pci.xxx')`.
   Read each source file before porting. Never rewrite from memory.
 - Phase 7.4: Main dashboard templates/index.html
 - Phase 7.5: Service pages (ug405, rtig, autodim, offline, agd, flir)
+
+---
+
+## 2026-06-03 — Phase 7.2 complete
+
+### Phase 7.2 — css/pci.css extracted from design.html  ✓ COMPLETE
+
+**Built:**
+- `web/static/css/pci.css` — 321 lines, all production CSS from design.html.
+  Contains: `:root` tokens, `body`, `header`, all component classes.
+- `web/static/design.html` — `<style>` block replaced with
+  `<link rel="stylesheet" href="css/pci.css">` + small inline `<style>`
+  containing only the `.ds-*` design-reference helpers (11 rules).
+
+**Decisions:**
+- `.ds-*` helpers kept inline in design.html — they are reference-document
+  scaffolding only and should not ship in the stylesheet templates link to.
+  All production component styles are in pci.css with zero duplication.
+
+**Verification:**
+- Line counts consistent: 815 (design.html) + 321 (pci.css) = 1136 (original).
+- `grep -c ".ds-" pci.css` → 0 (no helper classes in production stylesheet).
+- No production CSS rules remain inline in design.html style block.
+
+**Outstanding for next session:**
+- Phase 7.3: Port MOVA popup pages from /opt/MOVA/pci_mova/web/static/
+  (dataset, derived, analysis, messages, errors, history)
+  Read each source file before porting. Never rewrite from memory.
+- Phase 7.4: Main dashboard templates/index.html
+- Phase 7.5: Service pages (ug405, rtig, autodim, offline, agd, flir)
