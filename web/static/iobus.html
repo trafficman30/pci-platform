@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IOBus Signals — PCI Platform</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* iobus.html page-specific — uses only existing design tokens */
+    .cards-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+    .cards-row .metric-card { flex: 1; min-width: 120px; }
+    .metric-value.sm { font-size: 14px; }
+
+    .val-on  { color: var(--green); font-weight: 600; font-family: var(--mono); font-size: 12px; }
+    .val-off { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+
+    /* Group header rows in signal table */
+    .sig-group > th {
+      background: var(--sidebar-bg);
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      font-weight: 600;
+    }
+
+    /* Flash row on signal change */
+    @keyframes flash-sig { 0% { background: #15803d28; } 100% { background: transparent; } }
+    .sig-changed { animation: flash-sig 0.8s ease-out; }
+
+    .sig-filter { margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI PLATFORM</div>
+      <div class="logo-sub">IOBus Signals</div>
+    </div>
+  </div>
+  <div class="conn-indicator">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span id="conn-label">CONNECTING</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+<nav class="sidebar">
+  <div class="nav-group-label">Navigation</div>
+  <a class="nav-item" href="/">
+    <div class="nav-item-dot"></div>&#8592; Dashboard
+  </a>
+  <div class="nav-group-label">IO</div>
+  <a class="nav-item active">
+    <div class="nav-item-dot"></div>IOBus Signals
+  </a>
+</nav>
+
+<main>
+
+  <!-- ── Metric cards ── -->
+  <div class="cards-row">
+    <div class="metric-card">
+      <div class="metric-label">Signals</div>
+      <div class="metric-value" id="m-count">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Changes / 5 s</div>
+      <div class="metric-value" id="m-rate">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Last Change</div>
+      <div class="metric-value sm" id="m-last">—</div>
+    </div>
+  </div>
+
+  <!-- ── Filter ── -->
+  <div class="sig-filter">
+    <input class="search-input" id="sig-filter" type="text"
+           placeholder="Filter signals…" oninput="applyFilter()">
+  </div>
+
+  <!-- ── Signal table ── -->
+  <div class="table-card" id="sig-table-wrap">
+    <div class="no-content">Loading signals…</div>
+  </div>
+
+</main>
+</div>
+
+<footer>
+  <span class="footer-tick" id="tick">&#9670;</span>
+  <span id="footer-time">—</span>
+  <span id="conn-status">not connected</span>
+</footer>
+
+<script>
+// Per-signal state (name → {value, src, ts})
+const signals = {};
+
+// Recent change timestamps for rate calculation
+const changeTimes = [];
+
+let _tickFlip = false;
+
+// ── Group classification ──────────────────────────────────────────────────────
+
+const GROUP_ORDER = [
+  'Detectors', 'Confirms', 'CRB',
+  'XKOP — Inputs', 'XKOP — Outputs',
+  'RPDB — Inputs', 'RPDB — Outputs',
+  'GPIO — Inputs', 'GPIO — Outputs',
+  'AGD', 'FLIR', 'Virtual', 'Other',
+];
+
+function groupOf(name) {
+  const p = name.split('.');
+  const f = p[0];
+  if (f === 'xkop')    return p[1] === 'i' ? 'XKOP — Inputs'  : 'XKOP — Outputs';
+  if (f === 'rpdb')    return p[1] === 'i' ? 'RPDB — Inputs'  : 'RPDB — Outputs';
+  if (f === 'gp')      return p[1] === 'i' ? 'GPIO — Inputs'  : 'GPIO — Outputs';
+  if (f === 'det')     return 'Detectors';
+  if (f === 'confirm') return 'Confirms';
+  if (f === 'crb')     return 'CRB';
+  if (f === 'virt')    return 'Virtual';
+  if (f === 'agd')     return 'AGD';
+  if (f === 'flir')    return 'FLIR';
+  return 'Other';
+}
+
+function groupId(g) {
+  return 'grp-' + g.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+}
+
+// ── Table build ───────────────────────────────────────────────────────────────
+
+function buildTable(snap) {
+  const names = Object.keys(snap).sort();
+  document.getElementById('m-count').textContent = names.length;
+
+  const wrap = document.getElementById('sig-table-wrap');
+  if (!names.length) {
+    wrap.innerHTML = '<div class="no-content">No signals registered.</div>';
+    return;
+  }
+
+  // Group names
+  const groups = {};
+  for (const name of names) {
+    const g = groupOf(name);
+    (groups[g] = groups[g] || []).push(name);
+  }
+
+  const table = document.createElement('table');
+  table.style.width = '100%';
+  table.innerHTML =
+    '<thead><tr><th>Signal</th><th>Value</th><th>Source</th><th>Last Change</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+
+  const ordered = GROUP_ORDER.filter(g => groups[g]);
+  const extra   = Object.keys(groups).filter(g => !GROUP_ORDER.includes(g)).sort();
+
+  for (const g of [...ordered, ...extra]) {
+    const grpRow = document.createElement('tr');
+    grpRow.className = 'sig-group';
+    grpRow.id = groupId(g);
+    grpRow.innerHTML = `<th colspan="4">${g}</th>`;
+    tbody.appendChild(grpRow);
+
+    for (const name of groups[g]) {
+      tbody.appendChild(makeRow(name, snap[name], null, null));
+      signals[name] = { value: snap[name], src: null, ts: null };
+    }
+  }
+
+  table.appendChild(tbody);
+  wrap.innerHTML = '';
+  wrap.appendChild(table);
+}
+
+function makeRow(name, value, src, ts) {
+  const safeId = name.replace(/\./g, '_');
+  const tr = document.createElement('tr');
+  tr.id = 'sig-' + safeId;
+  tr.innerHTML = `
+    <td class="td-mono">${name}</td>
+    <td class="${value > 0 ? 'val-on' : 'val-off'}"
+        id="sv-${safeId}">${value}</td>
+    <td style="font-size:11px;color:var(--muted)"
+        id="ss-${safeId}">${src || '—'}</td>
+    <td style="font-size:11px;color:var(--muted);white-space:nowrap"
+        id="st-${safeId}">${ts ? fmtTs(ts) : '—'}</td>
+  `;
+  return tr;
+}
+
+// ── Signal update from SSE ────────────────────────────────────────────────────
+
+function applySignalUpdate(name, value, src, ts) {
+  const safeId = name.replace(/\./g, '_');
+  const valEl  = document.getElementById('sv-' + safeId);
+
+  if (!valEl) {
+    // Signal appeared after initial load — reload the whole table
+    loadSignals();
+    return;
+  }
+
+  valEl.textContent = value;
+  valEl.className   = value > 0 ? 'val-on' : 'val-off';
+
+  const srcEl = document.getElementById('ss-' + safeId);
+  const tsEl  = document.getElementById('st-' + safeId);
+  if (srcEl) srcEl.textContent = src || '—';
+  if (tsEl)  tsEl.textContent  = ts ? fmtTs(ts) : '—';
+
+  // Flash row
+  const trEl = document.getElementById('sig-' + safeId);
+  if (trEl) {
+    trEl.classList.remove('sig-changed');
+    void trEl.offsetWidth;   // force reflow to re-trigger animation
+    trEl.classList.add('sig-changed');
+  }
+
+  signals[name] = { value, src, ts };
+}
+
+// ── Filter ────────────────────────────────────────────────────────────────────
+
+function applyFilter() {
+  const term = document.getElementById('sig-filter').value.toLowerCase().trim();
+  let currentGroup = null;
+  let groupHasVisible = false;
+
+  document.querySelectorAll('#sig-table-wrap tbody tr').forEach(tr => {
+    if (tr.classList.contains('sig-group')) {
+      if (currentGroup && !groupHasVisible) currentGroup.style.display = 'none';
+      currentGroup = tr;
+      groupHasVisible = false;
+      tr.style.display = '';
+    } else {
+      const td = tr.querySelector('.td-mono');
+      if (!td) return;
+      const visible = !term || td.textContent.toLowerCase().includes(term);
+      tr.style.display = visible ? '' : 'none';
+      if (visible) groupHasVisible = true;
+    }
+  });
+
+  // Handle last group
+  if (currentGroup && !groupHasVisible) currentGroup.style.display = 'none';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtTs(epoch) {
+  return new Date(epoch * 1000).toLocaleTimeString('en-GB', {
+    hour12: false,
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    fractionalSecondDigits: 3,
+  });
+}
+
+function updateChangeRate() {
+  const now = Date.now();
+  while (changeTimes.length && changeTimes[0] < now - 5000) changeTimes.shift();
+  document.getElementById('m-rate').textContent = changeTimes.length;
+}
+
+setInterval(updateChangeRate, 1000);
+
+// ── SSE connection ────────────────────────────────────────────────────────────
+
+const es = new EventSource('/sse/iobus');
+
+es.onmessage = e => {
+  const data = JSON.parse(e.data);
+  if (data.error) return;
+
+  const { name, value, ts, src } = data;
+  applySignalUpdate(name, value, src, ts);
+
+  changeTimes.push(Date.now());
+  document.getElementById('m-last').textContent = ts ? fmtTs(ts)
+    : new Date().toLocaleTimeString('en-GB', { hour12: false });
+
+  _tickFlip = !_tickFlip;
+  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+  document.getElementById('footer-time').textContent =
+    new Date().toLocaleTimeString('en-GB', { hour12: false });
+};
+
+es.onopen = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot live';
+  document.getElementById('conn-label').textContent   = 'LIVE';
+  document.getElementById('conn-status').textContent  = 'connected';
+};
+
+es.onerror = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot error';
+  document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+  document.getElementById('conn-status').textContent  = 'SSE disconnected';
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+async function loadSignals() {
+  try {
+    const r = await fetch('/api/iobus/signals');
+    if (!r.ok) {
+      document.getElementById('sig-table-wrap').innerHTML =
+        '<div class="no-content">IOBus not available — is pci.iobus running?</div>';
+      return;
+    }
+    const snap = await r.json();
+    buildTable(snap);
+    applyFilter();
+  } catch (e) {
+    document.getElementById('sig-table-wrap').innerHTML =
+      `<div class="no-content">Could not load signal table: ${e.message}</div>`;
+  }
+}
+
+loadSignals();
+</script>
+</body>
+</html>

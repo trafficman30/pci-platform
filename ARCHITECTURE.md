@@ -1203,3 +1203,190 @@ requirements.txt lives at /opt/pci/requirements.txt
 Add packages there as new services require them.
 All services share the same requirements.txt.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+KEEP AT THE END - MICKS NOTES
+=============================
+Mick as asked AI agent for thoughts - it is useful for discussion and realism to ensure their "Contructive" concerns are not a blocker for field use !
+
+ARCHITECTURE.md
+
+I think the structure is genuinely strong — one of the better-designed control system architectures I've seen for this kind of domain.
+What’s Excellent
+
+Separation of Concerns & Fault Isolation
+The decision to make every major function its own service communicating over Unix domain sockets is excellent. True isolation: one service can crash/restart without bringing down the whole system. This is production-grade thinking, especially for traffic signal controllers that need to stay alive.
+IOBus as the Single Source of Truth
+Centralizing all hardware interaction in pci.iobus with a clean BATCH/W protocol and strict ownership rules is very smart. It prevents the classic "multiple things fighting over outputs" problem. The shared ownership support for things like stage forcing (MOVA vs UG405 vs offline) shows real-world pragmatism.
+Respect for Legacy + Clean Evolution
+You’re not throwing away the working /opt/MOVA and /opt/CM5 codebases — you’re treating them as authoritative references while building a better-structured platform around them. This is the correct way to modernize legacy industrial systems.
+MOVA Kernel Design
+Keeping the tick loop on the main thread, IPC on background threads, and direct AML TCP for MOVA Tools is correct. The 150ms detector latch being isolated to kernel_io.py (not polluting the rest of the system) is also the right call.
+Web Architecture
+Single web process that aggregates everything via IPC sockets + direct JSONL log reading is clean. No HTTP servers sprinkled everywhere.
+Documentation & Process
+This ARCHITECTURE.md is unusually good. The phase gating, "read before writing", "one task per session", and strict rules show serious engineering discipline.
+
+Areas That Concern Me (Constructive)
+
+Socket Proliferation
+You’re going to end up with quite a few Unix sockets (mova.N, ug405, rtig, iobus.live, etc.). It works, but debugging timing/interaction issues across services can become painful. Consider adding lightweight distributed tracing (e.g. request IDs or correlation IDs on messages) early.
+Python for Hard Timing
+Running a 100ms hard tick in Python (even with the main thread discipline) is brave. You’ve mitigated the obvious risks, but you’ll want very good monitoring on tick latency (max, p99) under load, especially when multiple MOVA instances + drivers are active.
+Configuration Complexity
+signals.cfg + streams.json + platform.cfg + per-service .cfg files is flexible but has high cognitive overhead. It will be easy to get into inconsistent states. A future validation/linting tool for the config would be valuable.
+Web as Potential Chokepoint
+Right now the web process is relatively light, but as you add more services and richer UIs (history playback, multiple streams, etc.), it could become busy. The current design (SSE + direct log reading) is good though.
+
+Overall Verdict
+This is solid 8.5/10 architecture for what it is — a robust, field-deployable traffic control platform. It feels like a thoughtful evolution of the CM5/MOVA systems rather than a rewrite for the sake of rewriting.
+The structure properly balances:
+
+Reliability & isolation (critical for safety-related systems)
+Maintainability
+Re-use of proven logic
+
+It’s much better than the typical "big ball of mud" you usually see in industrial control software.
+
+PHASE_LOG.md
+
+Solid work. The PHASE_LOG.md reflects a very disciplined execution of the architecture.
+Overall Impression
+This is excellent project hygiene — rare to see in this kind of embedded/industrial software project. You're treating this like a serious engineering effort rather than a typical hacky rewrite. The append-only log, clear phase boundaries, "read before writing" discipline, and detailed test notes show strong process maturity.
+What's Working Well
+
+Pace and Momentum
+You've knocked out Phases 1–6 + most of Phase 7 in just two days (2026-06-02 and 03). That's impressive velocity while maintaining quality. The fact that you're consistently doing import checks and noting outstanding items is great.
+Architectural Fidelity
+You're sticking closely to the rules in ARCHITECTURE.md:
+Services are properly isolated with their own IPC patterns.
+IOBus ownership rules (including the shared ownership extension) were handled cleanly.
+Web aggregation layer is being built incrementally without breaking existing MOVA functionality.
+Heavy reuse of patterns (IPCServer/XXXClient, SSE endpoints, etc.).
+
+Attention to Detail
+Good notes on decisions (e.g. why two uvicorn servers, astral-only dimming, replay format, etc.).
+Config override patterns via env vars are consistent.
+Logging unification was done thoroughly across all services.
+UI work is properly anchored in design.html + pci.css — avoiding style drift.
+
+Pragmatism
+Deferring pysnmp v7 migration.
+Accepting poll-based monitoring in UG405 instead of forcing a push model.
+Keeping MOVA Tools AML as a hard gate before ARM64.
+
+
+Minor Concerns / Observations
+
+Web Layer is Getting Heavy
+web_main.py and app.py are accumulating a lot of client instantiations and parameter passing (ug405_client, rtig_client, autodim_client, etc.). This is manageable now, but when you get to full service pages it might start feeling messy. Consider a small ServiceClients registry object in the near future.
+Testing Gap
+Most phases end with "Import check passed. No runtime test yet." This is understandable during rapid development, but before moving to ARM64 (Phase 8), you'll want a proper integration test suite (even if just a bash script that starts the stack with driver=sim and checks basic end-to-end flows).
+Documentation Lag
+ARCHITECTURE.md has had a few corrections (filenames, port numbers, log patterns). That's normal, but keep it up to date — especially socket paths and config sections.
+Phase 7.5 (Service Pages)
+You're in the middle of this. The ug405.html implementation looks thoughtful. Just make sure the other service pages follow the exact same patterns (sidebar link back to dashboard, consistent layout, SSE usage) to keep the UI cohesive.
+
+Verdict
+Execution quality: 9/10
+You're building exactly what the architecture document described, with good notes and minimal scope creep. The project feels healthy and on track for a successful field deployment once MOVA Tools AML (Phase 7.6) is done.
+This is the kind of log I'd be happy to see on a real safety-critical or field-deployed system.
+
+
+Here's my practical advice on how you should approach the concerns I raised about ARCHITECTURE.md and PHASE_LOG.md.
+1. Overall Philosophy First
+You’re in a strong position. The platform is already quite mature. Don’t over-engineer fixes prematurely. Prioritise risk reduction for field deployment (Phase 8) over perfection.
+Recommended mindset:
+
+Fix what hurts now or will hurt soon.
+Document architectural trade-offs clearly.
+Keep momentum on Phase 7.6 (MOVA Tools AML) — that’s the current gate.
+
+
+2. Prioritised Action Plan
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PriorityConcernRecommended ApproachWhen to Do ItHighTesting GapBuild a basic integration test harness (tools/integration_test.sh or Python script) that starts the full stack with driver=sim + replay file, checks MOVA tick latency, service heartbeats, web SSE, etc.Before Phase 7.6HighDocumentation LagAt the end of every session (as your process already says), spend 2–3 mins updating ARCHITECTURE.md with any deviations or new decisions.Every sessionMediumConfiguration ComplexityCreate a config validator tool (tools/validate_config.py). It should check signals.cfg ownership consistency, required files per enabled service, stream mappings, etc.After Phase 7.6MediumSocket ProliferationAdd a small correlation ID or request_id to all IPC messages. Also consider adding a central debug endpoint in web (/debug/sockets) that shows status of all connected sockets.Phase 7.5 / 8MediumPython 100ms TickAdd tick latency monitoring inside MOVA kernel (track max/p99/avg tick time over last 60s and push as part of snapshot). Alert if >80ms.Phase 7.6LowWeb as ChokepointMonitor it first. Only refactor if you see memory/CPU pressure during testing. Consider making ServiceClients a proper registry class.After full UI (Phase 7.5)
+
+3. Concrete Next Steps I Recommend
+
+Today / This Week (while doing Phase 7.5 / 7.6)
+Continue with the current disciplined process (read → summarise → implement → log).
+At the end of each session, quickly scan ARCHITECTURE.md and add a short "Architectural Notes" section at the bottom if anything important changed.
+Add basic tick timing instrumentation in mova/kernel_main.py (even if just logging for now).
+
+Before ARM64 Deployment (Phase 8)
+Build the integration test script.
+Run full stack load test (2 MOVA streams + sim replay + UG405 + RTIG traffic).
+Stress test web with many open browser tabs / long history playback.
+
+Longer Term (Post Phase 8)
+Config validator + schema.
+Better observability (maybe Prometheus metrics endpoint in web).
+Consider whether any services should be rewritten in Go/Rust (only the hardest real-time ones).
+====================================
+

@@ -215,6 +215,10 @@ class IOBusServer:
                     vals = ' '.join(str(self._table.read(s)) for s in parts[1:])
                     conn.sendall((vals + '\n').encode())
 
+                elif cmd == 'SNAP':
+                    snap = self._table.snapshot()
+                    conn.sendall((json.dumps(snap) + '\n').encode())
+
                 elif cmd == 'W' and len(parts) == 3:
                     if identity is None:
                         conn.sendall(b'ERR no identity - send HELLO first\n')

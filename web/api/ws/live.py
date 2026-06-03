@@ -259,6 +259,44 @@ async def flir_sse():
     )
 
 
+@router.get("/iobus")
+async def iobus_sse():
+    _LIVE = '/tmp/pci.iobus.live.sock'
+
+    async def generate():
+        try:
+            reader, writer = await asyncio.open_unix_connection(_LIVE)
+        except Exception as e:
+            log.warning("iobus live socket not available: %s", e)
+            yield f"data: {json.dumps({'error': 'IOBus not connected'})}\n\n"
+            return
+        try:
+            while True:
+                try:
+                    line = await asyncio.wait_for(reader.readline(), timeout=25.0)
+                    if not line:
+                        break
+                    yield f"data: {line.decode().strip()}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            try:
+                writer.close()
+            except Exception:
+                pass
+
+    return StreamingResponse(
+        generate(),
+        media_type = "text/event-stream",
+        headers    = {
+            "Cache-Control"   : "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.get("/ug405")
 async def ug405_sse():
     if _ug405_client is None:

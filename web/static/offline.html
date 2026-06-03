@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline Plans — PCI Platform</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* offline.html page-specific — uses only existing design tokens */
+    .cards-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    .cards-row .metric-card { flex: 1; min-width: 130px; }
+    .metric-value.sm { font-size: 14px; }
+    .section-gap { margin-top: 20px; }
+
+    /* SCN blocks */
+    .scn-block {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
+    }
+    .scn-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .scn-name { font-weight: 700; font-size: 14px; font-family: var(--mono); }
+
+    /* Cycle position bar */
+    .cycle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .cycle-label { font-size: 10px; color: var(--muted); text-transform: uppercase;
+                   letter-spacing: 0.06em; width: 36px; }
+    .cycle-bar-bg   { width: 180px; height: 6px; background: var(--border);
+                      border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+    .cycle-bar-fill { height: 100%; background: var(--accent2); border-radius: 3px;
+                      transition: width 0.4s ease; }
+    .cycle-nums  { font-family: var(--mono); font-size: 11px; color: var(--muted);
+                   white-space: nowrap; }
+    .cycle-step  { font-family: var(--mono); font-size: 11px; color: var(--muted);
+                   white-space: nowrap; }
+
+    /* Timetable: active row */
+    .tt-active td { background: #eff6ff; color: var(--accent2); font-weight: 600; }
+    .tt-day-tags  { display: flex; gap: 4px; flex-wrap: wrap; }
+    .tt-day       { font-family: var(--mono); font-size: 10px; padding: 1px 5px;
+                    border-radius: 3px; background: var(--bg3);
+                    border: 1px solid var(--border); color: var(--muted); }
+    .tt-day.today { background: #dbeafe; border-color: #93c5fd; color: var(--accent2); }
+
+    /* Plan detail collapsible */
+    details { margin-top: 6px; }
+    details summary {
+      font-size: 11px; color: var(--muted); cursor: pointer;
+      user-select: none; padding: 4px 0;
+    }
+    details summary:hover { color: var(--text); }
+    details[open] summary { color: var(--accent2); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI PLATFORM</div>
+      <div class="logo-sub">Offline Plans</div>
+    </div>
+  </div>
+  <div class="conn-indicator">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span id="conn-label">CONNECTING</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+<nav class="sidebar">
+  <div class="nav-group-label">Navigation</div>
+  <a class="nav-item" href="/">
+    <div class="nav-item-dot"></div>&#8592; Dashboard
+  </a>
+  <div class="nav-group-label">Services</div>
+  <a class="nav-item active">
+    <div class="nav-item-dot"></div>Offline Plans
+  </a>
+</nav>
+
+<main>
+
+  <!-- ── Metric cards ── -->
+  <div class="cards-row">
+    <div class="metric-card">
+      <div class="metric-label">Active SCNs</div>
+      <div class="metric-value" id="m-active">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Base Time Mode</div>
+      <div class="metric-value sm" id="m-time-mode">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Active In Modes</div>
+      <div class="metric-value sm" id="m-modes">—</div>
+    </div>
+  </div>
+
+  <!-- ── SCN blocks ── -->
+  <div class="section-title" style="margin-bottom:8px">SCN Status</div>
+  <div id="scn-container">
+    <div class="no-content">Waiting for data…</div>
+  </div>
+
+  <!-- ── Timetable ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Timetable</div>
+    <div id="timetable-wrap">
+      <div class="no-content">No timetable loaded.</div>
+    </div>
+  </div>
+
+  <!-- ── Plan detail ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Plan Detail</div>
+    <div id="plan-detail-wrap">
+      <div class="no-content">No plans loaded.</div>
+    </div>
+  </div>
+
+  <!-- ── Reload ── -->
+  <div class="section-gap" style="display:flex;align-items:center;gap:12px">
+    <button class="btn btn-log" id="btn-reload" onclick="reloadPlan()">Reload Plan File</button>
+    <span id="reload-status" style="font-size:11px;color:var(--muted)"></span>
+  </div>
+
+</main>
+</div>
+
+<footer>
+  <span class="footer-tick" id="tick">&#9670;</span>
+  <span id="footer-time">—</span>
+  <span id="conn-status">not connected</span>
+</footer>
+
+<script>
+let _tickFlip  = false;
+let _lastSnap  = null;
+
+// ── Time helpers ──────────────────────────────────────────────────────────────
+
+const _DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function todayName() { return _DAYS[new Date().getDay()]; }
+function todayHHMM() {
+  const n = new Date();
+  return n.getHours().toString().padStart(2,'0') + n.getMinutes().toString().padStart(2,'0');
+}
+
+function resolveActiveTimetableEntry(timetable) {
+  if (!timetable || !timetable.length) return null;
+  const today = todayName();
+  const hhmm  = todayHHMM();
+  let best = null;
+  for (const e of timetable) {
+    if (!e.days || !e.days.includes(today)) continue;
+    if (e.start <= hhmm) {
+      if (!best || e.start > best.start) best = e;
+    }
+  }
+  return best;
+}
+
+// ── SCN blocks ────────────────────────────────────────────────────────────────
+
+function renderSCNs(scns) {
+  const container = document.getElementById('scn-container');
+  if (!scns || !Object.keys(scns).length) {
+    container.innerHTML = '<div class="no-content">No SCNs configured.</div>';
+    document.getElementById('m-active').textContent = '0';
+    return;
+  }
+
+  let activeCount = 0;
+  const entries   = Object.entries(scns);
+
+  // Build/update each SCN block
+  entries.forEach(([scn, data]) => {
+    if (data.active_plan !== null) activeCount++;
+
+    const pct    = data.cycle_secs > 0
+      ? Math.min(100, (data.cycle_pos / data.cycle_secs) * 100).toFixed(1)
+      : 0;
+    const stepTxt = data.offset_idx >= 0
+      ? `step ${data.offset_idx + 1}`
+      : '—';
+
+    const planBadge = data.active_plan !== null
+      ? `<span class="badge badge-green">${data.active_plan}</span>`
+      : `<span class="badge badge-gray">Standing Down</span>`;
+
+    const cycleRow = data.active_plan !== null
+      ? `<div class="cycle-row">
+           <div class="cycle-label">Cycle</div>
+           <div class="cycle-bar-bg">
+             <div class="cycle-bar-fill" id="cyc-fill-${scn}"
+                  style="width:${pct}%"></div>
+           </div>
+           <span class="cycle-nums" id="cyc-nums-${scn}">
+             ${data.cycle_pos.toFixed(1)} / ${data.cycle_secs} s
+           </span>
+           <span class="cycle-step">${stepTxt}</span>
+         </div>`
+      : '';
+
+    let block = document.getElementById('scn-blk-' + scn);
+    if (!block) {
+      block = document.createElement('div');
+      block.id        = 'scn-blk-' + scn;
+      block.className = 'scn-block';
+      container.appendChild(block);
+    }
+
+    block.innerHTML = `
+      <div class="scn-header">
+        <span class="scn-name">${scn}</span>
+        ${planBadge}
+      </div>
+      ${cycleRow}
+    `;
+  });
+
+  // Remove stale blocks (SCN removed from config)
+  container.querySelectorAll('.scn-block').forEach(el => {
+    const scn = el.id.replace('scn-blk-', '');
+    if (!scns[scn]) el.remove();
+  });
+
+  document.getElementById('m-active').textContent = activeCount;
+}
+
+// ── Timetable ─────────────────────────────────────────────────────────────────
+
+function renderTimetable(timetable) {
+  const wrap = document.getElementById('timetable-wrap');
+  if (!timetable || !timetable.length) {
+    wrap.innerHTML = '<div class="no-content">No timetable loaded.</div>';
+    return;
+  }
+
+  const today      = todayName();
+  const activePlan = resolveActiveTimetableEntry(timetable);
+
+  let html = '<div class="table-card"><table style="width:100%">'
+    + '<thead><tr><th>Days</th><th>Start</th><th>Plan</th></tr></thead><tbody>';
+
+  for (const e of timetable) {
+    const isActive = activePlan && e === activePlan;
+    html += `<tr${isActive ? ' class="tt-active"' : ''}>
+      <td><div class="tt-day-tags">
+        ${(e.days || []).map(d =>
+            `<span class="tt-day${d === today ? ' today' : ''}">${d}</span>`
+          ).join('')}
+      </div></td>
+      <td class="td-mono">${e.start || '—'}</td>
+      <td><span class="badge badge-plan">${e.plan || '—'}</span></td>
+    </tr>`;
+  }
+
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+// ── Plan detail ───────────────────────────────────────────────────────────────
+
+function renderPlanDetail(plans) {
+  const wrap = document.getElementById('plan-detail-wrap');
+  if (!plans || !Object.keys(plans).length) {
+    wrap.innerHTML = '<div class="no-content">No plans loaded.</div>';
+    return;
+  }
+
+  let html = '';
+
+  for (const [scn, scnPlans] of Object.entries(plans)) {
+    html += `<details><summary>${scn} — ${Object.keys(scnPlans).length} plan(s)</summary>`;
+
+    for (const [planName, plan] of Object.entries(scnPlans)) {
+      // Collect all bit keys across all offsets for column headers
+      const allKeys = [];
+      for (const off of plan.offsets) {
+        for (const k of Object.keys(off.bits || {})) {
+          if (!allKeys.includes(k)) allKeys.push(k);
+        }
+      }
+
+      html += `<div style="margin:8px 0 12px 0">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">
+          <strong>${planName}</strong> — ${plan.cycle_secs} s cycle
+        </div>
+        <div class="table-card">
+          <table style="width:100%">
+            <thead><tr>
+              <th>at (s)</th>
+              ${allKeys.map(k => `<th>${k}</th>`).join('')}
+            </tr></thead>
+            <tbody>`;
+
+      for (const off of plan.offsets) {
+        html += `<tr>
+          <td class="td-mono">${off.at}</td>
+          ${allKeys.map(k => {
+            const v = off.bits ? off.bits[k] : undefined;
+            if (v === undefined) return '<td style="color:var(--border)">—</td>';
+            return v
+              ? `<td style="color:var(--green);font-family:var(--mono);font-weight:600">1</td>`
+              : `<td style="color:var(--muted);font-family:var(--mono)">0</td>`;
+          }).join('')}
+        </tr>`;
+      }
+
+      html += '</tbody></table></div></div>';
+    }
+
+    html += '</details>';
+  }
+
+  wrap.innerHTML = html;
+}
+
+// ── Snap handler ──────────────────────────────────────────────────────────────
+
+function handleSnap(s) {
+  _lastSnap = s;
+
+  // Metric cards
+  const settings = s.settings || {};
+  document.getElementById('m-time-mode').textContent =
+    settings.base_time_mode || '—';
+  document.getElementById('m-modes').textContent =
+    (settings.active_in_modes || []).join(', ') || '—';
+
+  renderSCNs(s.scns);
+  renderTimetable(s.timetable);
+  renderPlanDetail(s.plans);
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+
+const es = new EventSource('/sse/offline');
+
+es.onmessage = e => {
+  const data = JSON.parse(e.data);
+  if (data.t === 'snap') handleSnap(data);
+
+  _tickFlip = !_tickFlip;
+  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+  document.getElementById('footer-time').textContent =
+    new Date().toLocaleTimeString('en-GB', { hour12: false });
+};
+
+es.onopen = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot live';
+  document.getElementById('conn-label').textContent   = 'LIVE';
+  document.getElementById('conn-status').textContent  = 'connected';
+};
+
+es.onerror = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot error';
+  document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+  document.getElementById('conn-status').textContent  = 'SSE disconnected';
+};
+
+// ── Reload ────────────────────────────────────────────────────────────────────
+
+async function reloadPlan() {
+  const btn    = document.getElementById('btn-reload');
+  const status = document.getElementById('reload-status');
+  btn.disabled = true;
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Reloading…';
+  try {
+    const r   = await fetch('/api/offline/reload', { method: 'POST' });
+    const ack = await r.json();
+    status.textContent = ack.ok ? 'OK' : ('Error: ' + (ack.error || r.status));
+    status.style.color = ack.ok ? 'var(--green)' : 'var(--red)';
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.style.color = 'var(--red)';
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  }
+}
+</script>
+</body>
+</html>

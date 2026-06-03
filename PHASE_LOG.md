@@ -791,3 +791,78 @@ memory bar (green/amber/red thresholds from `/api/system/memory`).
 **Outstanding:**
 - Phase 7.5 continues: iobus.html, rtig.html, autodim.html, offline.html,
   agd.html, flir.html
+
+---
+
+## 2026-06-03 — Phase 7.5 continued — iobus, rtig, autodim, offline
+
+### Phase 7.5 (partial) — iobus.html, rtig.html, autodim.html, offline.html
+
+**Built:**
+
+**iobus.html — live signal table viewer:**
+- `iobus/server.py` — added `SNAP` command to `IOBusServer._handle()`.
+  Returns full signal table as JSON line: `{name: conditioned_value, ...}`.
+- `web/api/routes/iobus.py` — new file. `GET /api/iobus/signals` opens
+  short-lived connection to IOBus command socket, sends HELLO + SNAP,
+  returns JSON dict. Blocking call wrapped in `run_in_executor`.
+- `web/api/ws/live.py` — `GET /sse/iobus` added. Uses
+  `asyncio.open_unix_connection` directly to `/tmp/pci.iobus.live.sock`
+  (no intermediate client class — asyncio handles it natively). 25s keepalive.
+- `web/api/app.py` — iobus router at `/api/iobus`, `GET /iobus` page route.
+- `web/static/iobus.html` — on load: `GET /api/iobus/signals` populates full
+  table. SSE `/sse/iobus` provides live updates. Signals sorted alphabetically,
+  grouped by prefix (Detectors, Confirms, CRB, XKOP i/o, RPDB i/o, GPIO i/o,
+  AGD, FLIR, Virtual, Other). Group headers hidden by filter when all rows hidden.
+  Rows flash green on change. 3 metric cards: count, changes/5s, last change ts.
+  Search/filter box.
+
+**rtig.html — TLP log, rule status, pulse state:**
+- `web/static/rtig.html` — data from `/sse/rtig`, snap-only (1Hz).
+  4 metric cards: Total RX, Rules Loaded, Pulse Duration, Active Pulses.
+  Pulsing Now panel: active pulse signals shown as green badges.
+  TLP log table (50 rows): matched rows full opacity + green signal names;
+  unmatched rows at 55% opacity with italic "no match".
+  Rules section with Reload Rules button → `POST /api/rtig/reload_rules`.
+- `web/api/app.py` — `GET /rtig` page route added.
+
+**autodim.html — dim/bright status, next event:**
+- `web/static/autodim.html` — data from `/sse/autodim`, snap + transition events.
+  Large DIM/BRIGHT/UNKNOWN heading (amber/green/grey).
+  3 metric cards: enabled toggle (calls `POST /api/autodim/set_enabled/`),
+  IOBus signal name, last write time.
+  Today's Schedule panel: bright and dim UTC times; next event highlighted
+  blue with live countdown updated every second client-side; past events show
+  "passed"; post-dusk shows "~tomorrow" (service recalculates at midnight).
+  Configuration table: lat/lon, dim offset, bright offset.
+  Transition log: accumulates session `transition` events.
+- `web/api/app.py` — `GET /autodim` page route added.
+
+**offline.html — plan status, active SCN, cycle position:**
+- `web/static/offline.html` — data from `/sse/offline`, snap-only (1Hz).
+  3 metric cards: Active SCNs count, Base Time Mode, Active Modes.
+  Per-SCN blocks: green plan badge or grey "Standing Down"; cycle position
+  progress bar with CSS transition, position/duration text, step number.
+  Timetable table: today's day tags highlighted blue; currently resolved
+  active row highlighted; plan names as `.badge-plan` badges.
+  Plan Detail: collapsible `<details>` per SCN (collapsed by default);
+  per-plan offset table with per-bit columns derived from decoded snapshot.
+  Reload Plan File button → `POST /api/offline/reload`.
+- `web/api/app.py` — `GET /offline` page route added.
+
+**Decisions:**
+- iobus.html SSE uses direct asyncio unix socket — no background client thread
+  needed since the live socket is a raw push socket, not an IPC service socket.
+- iobus.html: unknown signal arriving via SSE (after initial load) triggers
+  full table reload — handles driver restart without page reload needed.
+- autodim.html countdown runs client-side setInterval(1000) from stored ISO
+  timestamps — no extra server round-trips for live countdown.
+- offline.html plan detail uses `<details>`/`<summary>` — no JS toggle needed,
+  collapsed by default to keep the page compact.
+
+**Verification:**
+- Import checks: all modules OK.
+- `from pci.web.api.app import create_app` — OK.
+
+**Outstanding:**
+- Phase 7.5 continues: agd.html, flir.html

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autodim — PCI Platform</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* autodim.html page-specific — uses only existing design tokens */
+    .cards-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    .cards-row .metric-card { flex: 1; min-width: 130px; }
+    .metric-value.sm { font-size: 14px; }
+    .section-gap { margin-top: 20px; }
+
+    /* Large current-state display */
+    .dim-state {
+      font-family: var(--mono);
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-bottom: 20px;
+    }
+    .dim-state.is-dim    { color: var(--amber); }
+    .dim-state.is-bright { color: var(--green); }
+    .dim-state.unknown   { color: var(--muted); }
+
+    /* Schedule rows */
+    .sched-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sched-row:last-child { border-bottom: none; }
+    .sched-label { width: 60px; font-size: 11px; color: var(--muted);
+                   text-transform: uppercase; letter-spacing: 0.06em; }
+    .sched-time  { font-family: var(--mono); font-size: 20px; font-weight: 600; width: 70px; }
+    .sched-time.next-event { color: var(--accent2); }
+    .sched-count { font-family: var(--mono); font-size: 11px; color: var(--muted); flex: 1; }
+    .sched-count.next-event { color: var(--accent2); font-weight: 600; }
+
+    /* Transition log */
+    .trans-dim    { color: var(--amber); font-weight: 600; font-family: var(--mono); }
+    .trans-bright { color: var(--green); font-weight: 600; font-family: var(--mono); }
+    .trans-arrow  { color: var(--muted); margin: 0 5px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI PLATFORM</div>
+      <div class="logo-sub">Autodim</div>
+    </div>
+  </div>
+  <div class="conn-indicator">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span id="conn-label">CONNECTING</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+<nav class="sidebar">
+  <div class="nav-group-label">Navigation</div>
+  <a class="nav-item" href="/">
+    <div class="nav-item-dot"></div>&#8592; Dashboard
+  </a>
+  <div class="nav-group-label">Services</div>
+  <a class="nav-item active">
+    <div class="nav-item-dot"></div>Autodim
+  </a>
+</nav>
+
+<main>
+
+  <!-- ── Current state ── -->
+  <div class="dim-state unknown" id="dim-state">UNKNOWN</div>
+
+  <!-- ── Metric cards ── -->
+  <div class="cards-row">
+    <div class="metric-card">
+      <div class="metric-label">Enabled</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <label class="toggle-sw">
+          <input type="checkbox" id="enabled-toggle" onchange="setEnabled(this.checked)">
+          <span class="slider"></span>
+        </label>
+        <span id="enabled-label" style="font-size:12px;color:var(--muted)">—</span>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">IOBus Signal</div>
+      <div class="metric-value sm" id="m-signal">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Last Write</div>
+      <div class="metric-value sm" id="m-lastwrite">—</div>
+    </div>
+  </div>
+
+  <!-- ── Today's schedule ── -->
+  <div class="section-title" style="margin-bottom:8px">Today's Schedule (UTC)</div>
+  <div class="panel" style="padding:0" id="sched-panel">
+    <div class="sched-row">
+      <div class="sched-label">Bright</div>
+      <div class="sched-time" id="bright-time">—</div>
+      <div class="sched-count" id="bright-count">—</div>
+    </div>
+    <div class="sched-row">
+      <div class="sched-label">Dim</div>
+      <div class="sched-time" id="dim-time">—</div>
+      <div class="sched-count" id="dim-count">—</div>
+    </div>
+  </div>
+
+  <!-- ── Configuration ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Configuration</div>
+    <div class="table-card">
+      <table style="width:100%">
+        <tbody>
+          <tr>
+            <td style="color:var(--muted);width:160px">Location (lat, lon)</td>
+            <td class="td-mono" id="cfg-location">—</td>
+          </tr>
+          <tr>
+            <td style="color:var(--muted)">Dim offset</td>
+            <td class="td-mono" id="cfg-dim-offset">—</td>
+          </tr>
+          <tr>
+            <td style="color:var(--muted)">Bright offset</td>
+            <td class="td-mono" id="cfg-bright-offset">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Transition log ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Transitions (this session)</div>
+    <div id="trans-log">
+      <div class="no-content">No transitions since page load.</div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<footer>
+  <span class="footer-tick" id="tick">&#9670;</span>
+  <span id="footer-time">—</span>
+  <span id="conn-status">not connected</span>
+</footer>
+
+<script>
+let _snap        = null;
+let _transitions = [];
+let _tickFlip    = false;
+
+// ── Time helpers ──────────────────────────────────────────────────────────────
+
+function fmtUtcHHMM(isoStr) {
+  if (!isoStr) return '—';
+  return new Date(isoStr).toLocaleTimeString('en-GB', {
+    hour12: false, timeZone: 'UTC', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function fmtCountdown(msRemaining) {
+  if (msRemaining <= 0) return null;
+  const h = Math.floor(msRemaining / 3_600_000);
+  const m = Math.floor((msRemaining % 3_600_000) / 60_000);
+  const s = Math.floor((msRemaining % 60_000) / 1_000);
+  if (h > 0) return `in ${h}h ${m}m`;
+  if (m > 0) return `in ${m}m ${s}s`;
+  return `in ${s}s`;
+}
+
+// ── Schedule (updated every second) ──────────────────────────────────────────
+
+function updateSchedule() {
+  if (!_snap || !_snap.dim_utc || !_snap.bright_utc) return;
+
+  const now      = Date.now();
+  const dimAt    = new Date(_snap.dim_utc).getTime();
+  const brightAt = new Date(_snap.bright_utc).getTime();
+
+  const brightTimeEl = document.getElementById('bright-time');
+  const brightCountEl = document.getElementById('bright-count');
+  const dimTimeEl    = document.getElementById('dim-time');
+  const dimCountEl   = document.getElementById('dim-count');
+
+  brightTimeEl.textContent = fmtUtcHHMM(_snap.bright_utc);
+  dimTimeEl.textContent    = fmtUtcHHMM(_snap.dim_utc);
+
+  // Reset next-event highlight
+  brightTimeEl.className  = 'sched-time';
+  brightCountEl.className = 'sched-count';
+  dimTimeEl.className     = 'sched-time';
+  dimCountEl.className    = 'sched-count';
+
+  const isDim = _snap.is_dim;
+
+  if (isDim === true) {
+    if (now < brightAt) {
+      // Before dawn — next event is bright
+      brightTimeEl.className  = 'sched-time next-event';
+      brightCountEl.className = 'sched-count next-event';
+      brightCountEl.textContent = fmtCountdown(brightAt - now) || 'very soon';
+      dimCountEl.textContent  = 'passed';
+    } else {
+      // After dusk — next bright is tomorrow (service recalculates at midnight)
+      brightCountEl.textContent = '~tomorrow';
+      dimCountEl.textContent    = 'passed';
+    }
+  } else if (isDim === false) {
+    // Daytime — next event is dim
+    const msToDim = dimAt - now;
+    dimTimeEl.className     = 'sched-time next-event';
+    dimCountEl.className    = 'sched-count next-event';
+    dimCountEl.textContent  = msToDim > 0 ? fmtCountdown(msToDim) : 'very soon';
+    brightCountEl.textContent = 'passed';
+  } else {
+    brightCountEl.textContent = '—';
+    dimCountEl.textContent    = '—';
+  }
+}
+
+setInterval(updateSchedule, 1000);
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function handleSnap(s) {
+  _snap = s;
+
+  // State heading
+  const stateEl = document.getElementById('dim-state');
+  if (s.is_dim === null || s.is_dim === undefined) {
+    stateEl.textContent = 'UNKNOWN';
+    stateEl.className   = 'dim-state unknown';
+  } else if (s.is_dim) {
+    stateEl.textContent = 'DIM';
+    stateEl.className   = 'dim-state is-dim';
+  } else {
+    stateEl.textContent = 'BRIGHT';
+    stateEl.className   = 'dim-state is-bright';
+  }
+
+  // Enable toggle (don't interrupt while user is interacting)
+  const tog = document.getElementById('enabled-toggle');
+  if (!tog.disabled) {
+    tog.checked = !!s.enabled;
+    document.getElementById('enabled-label').textContent =
+      s.enabled ? 'Enabled' : 'Disabled';
+  }
+
+  // Metric cards
+  document.getElementById('m-signal').textContent = s.signal || '—';
+  document.getElementById('m-lastwrite').textContent = s.last_write_ts
+    ? new Date(s.last_write_ts * 1000).toLocaleTimeString('en-GB', { hour12: false })
+    : '—';
+
+  // Config
+  document.getElementById('cfg-location').textContent =
+    (s.lat !== undefined && s.lon !== undefined)
+      ? `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`
+      : '—';
+  const fmtOffset = v =>
+    v === undefined ? '—' : (v > 0 ? `+${v}` : String(v)) + ' min';
+  document.getElementById('cfg-dim-offset').textContent    = fmtOffset(s.dim_offset);
+  document.getElementById('cfg-bright-offset').textContent = fmtOffset(s.bright_offset);
+
+  updateSchedule();
+}
+
+function handleTransition(ev) {
+  const ts   = new Date(ev.ts * 1000).toLocaleTimeString('en-GB', { hour12: false });
+  const prev = ev.is_dim ? 'BRIGHT' : 'DIM';
+  const next = ev.is_dim ? 'DIM'    : 'BRIGHT';
+  _transitions.unshift({ ts, prev, next, signal: ev.signal, value: ev.value });
+  if (_transitions.length > 20) _transitions.length = 20;
+  renderTransitions();
+}
+
+function renderTransitions() {
+  const el = document.getElementById('trans-log');
+  if (!_transitions.length) {
+    el.innerHTML = '<div class="no-content">No transitions since page load.</div>';
+    return;
+  }
+  let html = '<div class="table-card"><table style="width:100%">'
+    + '<thead><tr><th>Time</th><th>Transition</th><th>Signal</th><th>Value</th></tr></thead>'
+    + '<tbody>';
+  for (const t of _transitions) {
+    const prevCls = t.prev === 'DIM' ? 'trans-dim' : 'trans-bright';
+    const nextCls = t.next === 'DIM' ? 'trans-dim' : 'trans-bright';
+    html += `<tr>
+      <td style="white-space:nowrap;font-size:11px;color:var(--muted)">${t.ts}</td>
+      <td>
+        <span class="${prevCls}">${t.prev}</span>
+        <span class="trans-arrow">→</span>
+        <span class="${nextCls}">${t.next}</span>
+      </td>
+      <td class="td-mono">${t.signal}</td>
+      <td class="td-mono">${t.value}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+// ── Enable toggle ─────────────────────────────────────────────────────────────
+
+async function setEnabled(value) {
+  const tog = document.getElementById('enabled-toggle');
+  tog.disabled = true;
+  try {
+    await fetch(`/api/autodim/set_enabled/${value ? 1 : 0}`, { method: 'POST' });
+  } catch (e) {
+    console.warn('set_enabled failed', e);
+  } finally {
+    tog.disabled = false;
+  }
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+
+const es = new EventSource('/sse/autodim');
+
+es.onmessage = e => {
+  const data = JSON.parse(e.data);
+  if (data.t === 'snap')       handleSnap(data);
+  if (data.t === 'transition') handleTransition(data);
+
+  _tickFlip = !_tickFlip;
+  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+  document.getElementById('footer-time').textContent =
+    new Date().toLocaleTimeString('en-GB', { hour12: false });
+};
+
+es.onopen = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot live';
+  document.getElementById('conn-label').textContent   = 'LIVE';
+  document.getElementById('conn-status').textContent  = 'connected';
+};
+
+es.onerror = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot error';
+  document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+  document.getElementById('conn-status').textContent  = 'SSE disconnected';
+};
+</script>
+</body>
+</html>

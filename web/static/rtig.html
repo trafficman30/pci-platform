@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RTIG — PCI Platform</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* rtig.html page-specific — uses only existing design tokens */
+    .cards-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    .cards-row .metric-card { flex: 1; min-width: 120px; }
+    .metric-value.sm { font-size: 14px; }
+    .section-gap { margin-top: 20px; }
+
+    /* Pulsing signal badges */
+    .pulse-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #15803d1a;
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      margin: 2px 4px 2px 0;
+    }
+
+    /* TLP log: matched signals column */
+    .tlp-sig     { font-family: var(--mono); font-size: 11px; color: var(--green); font-weight: 600; }
+    .tlp-nomatch { font-family: var(--mono); font-size: 11px; color: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <div>
+      <div class="logo-text">PCI PLATFORM</div>
+      <div class="logo-sub">RTIG</div>
+    </div>
+  </div>
+  <div class="conn-indicator">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span id="conn-label">CONNECTING</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+<nav class="sidebar">
+  <div class="nav-group-label">Navigation</div>
+  <a class="nav-item" href="/">
+    <div class="nav-item-dot"></div>&#8592; Dashboard
+  </a>
+  <div class="nav-group-label">Services</div>
+  <a class="nav-item active">
+    <div class="nav-item-dot"></div>RTIG
+  </a>
+</nav>
+
+<main>
+
+  <!-- ── Metric cards ── -->
+  <div class="cards-row">
+    <div class="metric-card">
+      <div class="metric-label">Total RX</div>
+      <div class="metric-value" id="m-total">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Rules Loaded</div>
+      <div class="metric-value" id="m-rules">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Pulse Duration</div>
+      <div class="metric-value sm" id="m-pulse">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Active Pulses</div>
+      <div class="metric-value" id="m-pulsing-count">—</div>
+    </div>
+  </div>
+
+  <!-- ── Pulsing now ── -->
+  <div class="section-title" style="margin-bottom:8px">Pulsing Now</div>
+  <div class="panel" style="padding:10px 12px;min-height:38px" id="pulsing-panel">
+    <span style="color:var(--muted)">—</span>
+  </div>
+
+  <!-- ── TLP log ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">TLP Log</div>
+    <div class="table-card" id="tlp-wrap">
+      <div class="no-content">No TLPs received yet.</div>
+    </div>
+  </div>
+
+  <!-- ── Rules ── -->
+  <div class="section-gap">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <div class="section-title">Rules</div>
+      <button class="btn btn-log" id="btn-reload" onclick="reloadRules()">Reload Rules</button>
+      <span id="reload-status" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div id="rules-info" style="font-size:12px;color:var(--muted);font-family:var(--mono)">—</div>
+  </div>
+
+</main>
+</div>
+
+<footer>
+  <span class="footer-tick" id="tick">&#9670;</span>
+  <span id="footer-time">—</span>
+  <span id="conn-status">not connected</span>
+</footer>
+
+<script>
+let _tickFlip = false;
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function renderPulsing(pulsing) {
+  const el = document.getElementById('pulsing-panel');
+  document.getElementById('m-pulsing-count').textContent = pulsing.length;
+  if (!pulsing.length) {
+    el.innerHTML = '<span style="color:var(--muted)">—</span>';
+    return;
+  }
+  el.innerHTML = pulsing
+    .map(s => `<span class="pulse-badge">${s}</span>`)
+    .join('');
+}
+
+function renderTlpLog(log) {
+  const wrap = document.getElementById('tlp-wrap');
+  if (!log || !log.length) {
+    wrap.innerHTML = '<div class="no-content">No TLPs received yet.</div>';
+    return;
+  }
+  let html = '<table style="width:100%">'
+    + '<thead><tr>'
+    + '<th>Time</th><th>Signal</th><th>Mov</th>'
+    + '<th>Trigger</th><th>Pri</th><th>Dev</th>'
+    + '<th>Matched Signals</th>'
+    + '</tr></thead><tbody>';
+
+  for (const e of log) {
+    const hasMatch  = e.matched && e.matched.length > 0;
+    const matchCell = hasMatch
+      ? e.matched.map(s => `<span class="tlp-sig">${s}</span>`).join(' ')
+      : '<span class="tlp-nomatch">no match</span>';
+    const rowStyle  = hasMatch ? '' : ' style="opacity:0.55"';
+    html += `<tr${rowStyle}>
+      <td style="white-space:nowrap;font-size:11px;color:var(--muted)">${e.ts}</td>
+      <td class="td-mono">${e.traffic_signal ?? '—'}</td>
+      <td class="td-mono">${e.movement ?? '—'}</td>
+      <td class="td-mono">${e.trigger_point ?? '—'}</td>
+      <td class="td-mono">${e.priority ?? '—'}</td>
+      <td class="td-mono">${e.schedule_deviation ?? '—'}</td>
+      <td>${matchCell}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function renderRulesInfo(count, pulse_secs) {
+  document.getElementById('rules-info').textContent =
+    `${count} rule${count === 1 ? '' : 's'} loaded  ·  pulse duration ${pulse_secs} s`;
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+
+function handleSnap(s) {
+  document.getElementById('m-total').textContent = s.total_rx ?? '—';
+  document.getElementById('m-rules').textContent = s.rules_count ?? '—';
+  document.getElementById('m-pulse').textContent =
+    s.pulse_secs !== undefined ? s.pulse_secs + ' s' : '—';
+  renderPulsing(s.pulsing || []);
+  renderTlpLog(s.tlp_log || []);
+  renderRulesInfo(s.rules_count || 0, s.pulse_secs ?? '—');
+}
+
+const es = new EventSource('/sse/rtig');
+
+es.onmessage = e => {
+  const data = JSON.parse(e.data);
+  if (data.t === 'snap') handleSnap(data);
+
+  _tickFlip = !_tickFlip;
+  document.getElementById('tick').textContent = _tickFlip ? '◆' : '◇';
+  document.getElementById('footer-time').textContent =
+    new Date().toLocaleTimeString('en-GB', { hour12: false });
+};
+
+es.onopen = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot live';
+  document.getElementById('conn-label').textContent   = 'LIVE';
+  document.getElementById('conn-status').textContent  = 'connected';
+};
+
+es.onerror = () => {
+  document.getElementById('conn-dot').className    = 'conn-dot error';
+  document.getElementById('conn-label').textContent   = 'DISCONNECTED';
+  document.getElementById('conn-status').textContent  = 'SSE disconnected';
+};
+
+// ── Reload rules ──────────────────────────────────────────────────────────────
+
+async function reloadRules() {
+  const btn    = document.getElementById('btn-reload');
+  const status = document.getElementById('reload-status');
+  btn.disabled = true;
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Reloading…';
+  try {
+    const r   = await fetch('/api/rtig/reload_rules', { method: 'POST' });
+    const ack = await r.json();
+    status.textContent = ack.ok ? 'OK' : ('Error: ' + (ack.error || r.status));
+    status.style.color = ack.ok ? 'var(--green)' : 'var(--red)';
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.style.color = 'var(--red)';
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  }
+}
+</script>
+</body>
+</html>

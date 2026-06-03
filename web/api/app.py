@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from pci.web.api.routes.iobus   import router as iobus_router
 from pci.web.api.routes.mova    import router as mova_router,    set_registry as mova_set_reg
 from pci.web.api.routes.ug405   import router as ug405_router,   set_client   as ug405_set_client
 from pci.web.api.routes.rtig    import router as rtig_router,    set_client   as rtig_set_client, create_receiver_app
@@ -63,6 +64,7 @@ def create_app(registry, ug405_client=None, rtig_client=None,
         allow_headers     = ["*"],
     )
 
+    app.include_router(iobus_router,   prefix="/api/iobus",   tags=["IOBus"])
     app.include_router(mova_router,    prefix="/api/mova",    tags=["MOVA"])
     app.include_router(ug405_router,   prefix="/api/ug405",   tags=["UG405"])
     app.include_router(rtig_router,    prefix="/api/rtig",    tags=["RTIG"])
@@ -82,6 +84,22 @@ def create_app(registry, ug405_client=None, rtig_client=None,
         @app.get("/ug405", include_in_schema=False)
         async def ug405_page():
             return FileResponse(os.path.join(_STATIC, "ug405.html"))
+
+        @app.get("/iobus", include_in_schema=False)
+        async def iobus_page():
+            return FileResponse(os.path.join(_STATIC, "iobus.html"))
+
+        @app.get("/rtig", include_in_schema=False)
+        async def rtig_page():
+            return FileResponse(os.path.join(_STATIC, "rtig.html"))
+
+        @app.get("/autodim", include_in_schema=False)
+        async def autodim_page():
+            return FileResponse(os.path.join(_STATIC, "autodim.html"))
+
+        @app.get("/offline", include_in_schema=False)
+        async def offline_page():
+            return FileResponse(os.path.join(_STATIC, "offline.html"))
 
     log.info("FastAPI app created  streams=%s", registry.all_ids())
     return app
