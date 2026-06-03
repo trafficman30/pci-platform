@@ -7,6 +7,7 @@
 import sys
 import os
 import asyncio
+import concurrent.futures
 import logging
 
 sys.path.insert(0, '/opt')   # pci.* packages live under /opt/pci → /opt
@@ -40,6 +41,10 @@ def _read_config():
 
 async def _serve(app, port, rtig_app, rtig_port):
     log = logging.getLogger('pci.web')
+    # Default pool (min(32, cpu+4)) is too small on 2-CPU hosts — SSE zombie
+    # threads (one per live SSE connection) can exhaust it in a few navigations.
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=32))
     main_cfg = uvicorn.Config(app,      host='0.0.0.0', port=port,
                               log_level='info')
     rtig_cfg = uvicorn.Config(rtig_app, host='0.0.0.0', port=rtig_port,

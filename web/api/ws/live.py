@@ -73,7 +73,7 @@ async def mova_sse(stream_id: int):
             while True:
                 try:
                     ev = await loop.run_in_executor(
-                        None, lambda: q.get(block=True, timeout=25)
+                        None, lambda: q.get(block=True, timeout=2)
                     )
                     yield f"data: {json.dumps(ev, default=str)}\n\n"
                 except queue.Empty:
@@ -107,7 +107,7 @@ async def rtig_sse():
             while True:
                 try:
                     ev = await loop.run_in_executor(
-                        None, lambda: q.get(block=True, timeout=25)
+                        None, lambda: q.get(block=True, timeout=2)
                     )
                     yield f"data: {json.dumps(ev, default=str)}\n\n"
                 except queue.Empty:
@@ -140,7 +140,7 @@ async def offline_sse():
             while True:
                 try:
                     ev = await loop.run_in_executor(
-                        None, lambda: q.get(block=True, timeout=25)
+                        None, lambda: q.get(block=True, timeout=2)
                     )
                     yield f"data: {json.dumps(ev, default=str)}\n\n"
                 except queue.Empty:
@@ -173,7 +173,7 @@ async def autodim_sse():
             while True:
                 try:
                     ev = await loop.run_in_executor(
-                        None, lambda: q.get(block=True, timeout=25)
+                        None, lambda: q.get(block=True, timeout=2)
                     )
                     yield f"data: {json.dumps(ev, default=str)}\n\n"
                 except queue.Empty:
@@ -206,7 +206,7 @@ async def agd_sse():
             while True:
                 try:
                     ev = await loop.run_in_executor(
-                        None, lambda: q.get(block=True, timeout=25)
+                        None, lambda: q.get(block=True, timeout=2)
                     )
                     yield f"data: {json.dumps(ev, default=str)}\n\n"
                 except queue.Empty:
@@ -239,7 +239,7 @@ async def flir_sse():
             while True:
                 try:
                     ev = await loop.run_in_executor(
-                        None, lambda: q.get(block=True, timeout=25)
+                        None, lambda: q.get(block=True, timeout=2)
                     )
                     yield f"data: {json.dumps(ev, default=str)}\n\n"
                 except queue.Empty:
@@ -273,7 +273,7 @@ async def iobus_sse():
         try:
             while True:
                 try:
-                    line = await asyncio.wait_for(reader.readline(), timeout=25.0)
+                    line = await asyncio.wait_for(reader.readline(), timeout=2.0)
                     if not line:
                         break
                     yield f"data: {line.decode().strip()}\n\n"
@@ -310,7 +310,7 @@ async def ug405_sse():
             while True:
                 try:
                     ev = await loop.run_in_executor(
-                        None, lambda: q.get(block=True, timeout=25)
+                        None, lambda: q.get(block=True, timeout=2)
                     )
                     yield f"data: {json.dumps(ev, default=str)}\n\n"
                 except queue.Empty:
