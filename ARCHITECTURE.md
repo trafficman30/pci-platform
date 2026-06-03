@@ -408,6 +408,37 @@ MOVA Tools thread← AML TCP server (port 6000+N)
 Main thread owns the tick. This is deliberate — Python signal handlers only
 fire on the main thread. Tick on main guarantees SIGTERM → clean stop.
 
+### Tick overrun logging — field deployment blocker
+
+**Risk:** if the 100ms tick consistently runs long (CPU pressure, GIL contention,
+slow IOBus round trip), every overrun logs a WARNING. Under sustained pressure
+this produces thousands of log lines per minute — a catastrophic log storm that
+fills disk, saturates the unified `pci.log`, and can itself worsen the pressure.
+
+**Required behaviour before field deployment:**
+
+Log once when overrun starts, suppress during the storm, log once on recovery
+with a count of how many ticks were overrun and the peak duration.
+
+```
+# Pattern (already applied — confirm still present in kernel_main.py):
+if overrun and not _in_overrun:
+    log.warning("tick overrun %.0fms", elapsed_ms)
+    _in_overrun = True
+    _overrun_count = 1
+    _overrun_peak  = elapsed_ms
+elif overrun:
+    _overrun_count += 1
+    _overrun_peak = max(_overrun_peak, elapsed_ms)
+elif _in_overrun:
+    log.warning("tick overrun cleared after %d ticks, peak %.0fms",
+                _overrun_count, _overrun_peak)
+    _in_overrun = False
+```
+
+Verify this rate-limit is in place before any field deployment.
+Unguarded per-tick WARNING logging on a loaded CM5 is a hard field blocker.
+
 ---
 
 ## MOVA kernel — one codebase, N instances
@@ -1210,6 +1241,19 @@ Systemd units use:
 requirements.txt lives at /opt/pci/requirements.txt
 Add packages there as new services require them.
 All services share the same requirements.txt.
+
+### PYTHONPATH — field deployment requirement
+
+All services and systemd units must be launched with `PYTHONPATH=/opt`.
+
+This makes both `/opt/pci` and `/opt/MOVA` visible to the Python import system.
+`pci.mova.kernel` imports MOVA core from `/opt/MOVA/pci_mova/` intentionally —
+the MOVA runtime library lives there and is not duplicated into `/opt/pci`.
+
+**Field deployment rule:** all MOVA dependencies (numpy, etc.) must be installed
+into `/opt/pci/venv`. Do not rely on `/opt/mova-env` being present on the CM5 —
+it will not be. Run `pip install -r requirements.txt` in `/opt/pci/venv` and
+confirm `python -m pci.mova.kernel_main 0` imports cleanly before shipping.
 
 
 
