@@ -959,7 +959,7 @@ is_dim = (now >= dim_utc) OR (now < bright_utc)
 7.3  Port MOVA popup pages from /opt/MOVA/static/
      dataset, derived, analysis, messages, errors, history,
      satflow, tma, syslog  ✓ COMPLETE
-7.4  Main dashboard index.html
+7.4  Main dashboard index.html                          ✓ COMPLETE
 7.5  Service pages — ug405, rtig, autodim, offline, agd, flir
 ```
 
