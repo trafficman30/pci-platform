@@ -1,0 +1,45 @@
+--- a/pci_mova/core/stream.py	2026-06-03 23:32:33.289851431 +0100
++++ b/pci_mova/core/stream.py	2026-06-03 23:32:33.291186154 +0100
+@@ -102,6 +102,11 @@
+         self._crash_count: int = 0
+         self._CRASH_LIMIT  = 10   # consecutive tick failures before FAILED_RESTART
+ 
++        # ── Tick overrun rate-limiting ────────────────────────────────────────
++        self._overrun_active: bool  = False
++        self._overrun_count:  int   = 0
++        self._overrun_max_ms: float = 0.0
++
+         # ── Historical JSONL log ──────────────────────────────────────────────
+         self.stream_logger = StreamLogger(stream_id, LOG_DIR)
+ 
+@@ -216,9 +221,29 @@
+ 
+             sleep = next_tick - time.perf_counter()
+             if sleep > 0:
++                if self._overrun_active:
++                    logger.warning(
++                        "Stream %d: tick overrun cleared — %d ticks, max %.0f ms",
++                        self.stream_id, self._overrun_count, self._overrun_max_ms,
++                    )
++                    self._overrun_active = False
++                    self._overrun_count  = 0
++                    self._overrun_max_ms = 0.0
+                 time.sleep(sleep)
+             else:
+-                logger.debug("Stream %d: tick overrun %.3f ms", self.stream_id, -sleep * 1000)
++                overrun_ms = -sleep * 1000
++                if not self._overrun_active:
++                    logger.warning(
++                        "Stream %d: tick overrun started — %.0f ms",
++                        self.stream_id, overrun_ms,
++                    )
++                    self._overrun_active = True
++                    self._overrun_count  = 1
++                    self._overrun_max_ms = overrun_ms
++                else:
++                    self._overrun_count += 1
++                    if overrun_ms > self._overrun_max_ms:
++                        self._overrun_max_ms = overrun_ms
+ 
+     def _tick(self) -> None:
+         self._cycle += 1
