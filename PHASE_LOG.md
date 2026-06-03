@@ -471,3 +471,71 @@ Each now calls `from pci.shared.log import setup; setup('pci.xxx')`.
   det.1=1 (filtered), det.0=0. Recorded: `[{det.0,1}, {det.0,0}]` ✓
 
 **All import checks passed clean.** 15 files changed (283 insertions, 63 deletions).
+
+---
+
+## 2026-06-03 — Phase 7.1 complete
+
+### Phase 7.1 — design.html component library  ✓ COMPLETE
+
+**Built:**
+- `web/static/design.html` — 1136-line self-contained component library.
+  No external dependencies. All CSS uses `:root` custom properties.
+  Every component shown in every possible state.
+
+**Source files read:**
+- `/opt/MOVA/pci_mova/web/static/index.html` (1044 lines) — full HTML read
+- `/opt/CM5/cm5_web.py` — CSS extraction performed in prior session
+- All 10 MOVA static HTML files — CSS tokens verified identical across files
+
+**Path corrections (noted as ARCHITECTURE.md errors this session):**
+- Documented: `/opt/CM5/web/web.py` → actual: `/opt/CM5/cm5_web.py`
+- Documented: `/opt/MOVA/pci_mova/static/` → actual: `/opt/MOVA/pci_mova/web/static/`
+- Both corrected in ARCHITECTURE.md.
+
+**Design decisions applied:**
+- CSS architecture: MOVA approach — all values as `:root` custom properties.
+  CM5 hardcoded hex values converted to tokens.
+- Added tokens: `--sidebar-bg: #1e2d50`, `--accent2: #2563eb`,
+  `--live: #00e676`, `--error-dot: #ff5252`
+- Topbar brand: 15px (MOVA; CM5 was 16px)
+- Border radius: 8px for cards/panels, 6px for compact inner cards
+- Table padding: 6px 12px standard, 4px 8px compact
+- Sidebar nav: CM5 `.sidebar` / `.nav-item` / `.nav-group-label` included
+  alongside all MOVA stream card components — unified, not one or the other
+
+**Components documented (all states):**
+- Design tokens (palette, state colours) — colour swatches
+- Typography — sans + mono scale
+- Layout — topbar, logo, conn-dot (default/live/error), sidebar nav
+- Badges: `status-badge` (control/warmup/off/fault/nodata/other),
+  `badge` (green/amber/red/blue/purple/gray/plan), `pill` (ok/warn/err),
+  priority labels (prio-1/2/3)
+- Buttons: default, btn-start, btn-stop, btn-force, btn-log, btn-load,
+  btn-primary — hover states shown both live and as static preview
+- Tables: standard (6px 12px), compact (4px 8px), td-mono
+- Panels: panel, panel-header, panel-body, metric-card (ok/warn/err),
+  licence-grid (ok/nok/neutral), row2, no-content placeholder
+- Forms: form-input, form-select, search-input, search-match, toggle-sw (on/off/disabled)
+- Feedback: toast (default/success/error) + live demo button
+- Stream card: active/fault/warmup/collapsed/no-dataset states
+  Full anatomy: card-header, card-status-row (two rows), card-section-hdr,
+  bit-grid, faults-body, card-controls-row
+- Status row: CRB light (on/off), status-val (on/off/warn), toggle-btn
+- Bit grid: off/on/amber/red/hi-on/sync-on/fault-on
+- Simulation panel (open state) — all sim-btn states (active/crb-active/none-active),
+  sim-det-btn. Note: detector toggles wire to `/api/iobus/write` in templates,
+  not old kernel `/api/streams/{id}/io` commands.
+- XKOP sim panel: removed (replaced by driver_xkop.py — no longer a UI component)
+- CM5 config-section + toggle-sw
+- Log viewer: all five log levels (debug/info/warn/error/critical)
+- Footer: mem-bar at three fill levels (green <60%, amber 60-80%, red >80%)
+
+**Outstanding for next session:**
+- Phase 7.2: css/pci.css — extract production CSS from design.html into
+  a linked stylesheet (so templates can `<link>` it rather than embedding styles)
+- Phase 7.3: Port MOVA popup pages from /opt/MOVA/pci_mova/web/static/
+  (dataset, derived, analysis, messages, errors, history)
+  Read each source file before porting. Never rewrite from memory.
+- Phase 7.4: Main dashboard templates/index.html
+- Phase 7.5: Service pages (ug405, rtig, autodim, offline, agd, flir)
