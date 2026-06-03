@@ -15,6 +15,29 @@
     .val-off { color: var(--muted); font-family: var(--mono); font-size: 12px; }
     .section-gap { margin-top: 20px; }
     .scn-block { margin-bottom: 20px; }
+
+    /* SCN editor */
+    .scn-ed-block { background: var(--bg2); border: 1px solid var(--border);
+                    border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
+    .scn-ed-hdr  { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .scn-ed-name { font-family: var(--mono); font-size: 13px; font-weight: 700; flex: 1; }
+    .scn-ed-name input { background: var(--bg); border: 1px solid var(--border);
+                         border-radius: 4px; color: var(--fg); font-family: var(--mono);
+                         font-size: 13px; font-weight: 700; padding: 2px 8px; width: 140px; }
+    .sig-row { display: grid; grid-template-columns: 130px 60px 130px 28px;
+                gap: 4px 6px; align-items: center; margin-bottom: 3px; }
+    .sig-row span { font-size: 11px; color: var(--muted); }
+    .sig-row input { background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+                     color: var(--fg); font-family: var(--mono); font-size: 11px;
+                     padding: 2px 6px; width: 100%; min-width: 0; }
+    .sig-row input.inv-check { width: auto; }
+    .btn-rm { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; }
+    .btn-rm:hover { color: var(--error); }
+    .cfg-msg  { font-size: 11px; margin-left: 10px; }
+    .cfg-msg.ok  { color: var(--green); }
+    .cfg-msg.err { color: var(--error); }
+    .ed-sub { font-size: 10px; color: var(--muted); text-transform: uppercase;
+              letter-spacing: 0.05em; margin: 6px 0 3px; }
   </style>
 </head>
 <body>
@@ -90,6 +113,20 @@
     <div class="section-title" style="margin-bottom:8px">Control Activity</div>
     <div id="ug-ctrl-log">
       <div class="no-content">No control SETs received yet.</div>
+    </div>
+  </div>
+
+  <!-- ── SCN editor ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Edit SCN Signal Mappings</div>
+    <div class="panel" style="padding:16px">
+      <div class="no-content" id="scned-loading">Loading…</div>
+      <div id="scned-body" style="display:none"></div>
+      <div id="scned-btns" style="display:none;margin-top:10px">
+        <button class="btn" onclick="addScn()">+ Add SCN</button>
+        <button class="btn btn-primary" style="margin-left:6px" onclick="saveScns()">Save SCNs</button>
+        <span class="cfg-msg" id="scned-msg"></span>
+      </div>
     </div>
   </div>
 
@@ -351,10 +388,134 @@ function connect() {
 }
 connect();
 
+// ── SCN editor ────────────────────────────────────────────────────────────────
+
+let _scnData = null;
+
+async function loadScns() {
+  try {
+    const r = await fetch('/api/ug405_scns');
+    _scnData = await r.json();
+    renderScnEditor(_scnData.scns || []);
+  } catch (e) {
+    document.getElementById('scned-loading').textContent = 'Load failed: ' + e.message;
+  }
+}
+
+function renderScnEditor(scns) {
+  const body = document.getElementById('scned-body');
+  body.innerHTML = '';
+  for (const scn of scns) body.appendChild(makeScnBlock(scn));
+  document.getElementById('scned-loading').style.display = 'none';
+  body.style.display = '';
+  document.getElementById('scned-btns').style.display = '';
+}
+
+function makeScnBlock(scn) {
+  const div = document.createElement('div');
+  div.className = 'scn-ed-block';
+  div.innerHTML = `
+    <div class="scn-ed-hdr">
+      <div class="scn-ed-name">
+        <input type="text" placeholder="SCN name" value="${scn.name || ''}">
+      </div>
+      <button class="btn-rm" onclick="this.closest('.scn-ed-block').remove()">✕ Remove</button>
+    </div>
+    <div class="ed-sub">Reply signals (utcReply…)</div>
+    <div class="reply-rows"></div>
+    <button class="btn" style="font-size:11px;padding:2px 8px;margin-top:4px"
+            onclick="addSigRow(this,'reply')">+ Reply</button>
+    <div class="ed-sub" style="margin-top:10px">Control signals (utcControl…)</div>
+    <div class="control-rows"></div>
+    <button class="btn" style="font-size:11px;padding:2px 8px;margin-top:4px"
+            onclick="addSigRow(this,'control')">+ Control</button>`;
+  const replyRows   = div.querySelector('.reply-rows');
+  const controlRows = div.querySelector('.control-rows');
+  for (const r of (scn.reply   || [])) replyRows.appendChild(makeSigRow(r, 'reply'));
+  for (const r of (scn.control || [])) controlRows.appendChild(makeSigRow(r, 'control'));
+  return div;
+}
+
+function makeSigRow(r, kind) {
+  const div = document.createElement('div');
+  div.className = 'sig-row';
+  const bit = r.bit !== undefined && r.bit !== null ? r.bit : '';
+  const inv = kind === 'reply' && r.inverted ? 'checked' : '';
+  div.innerHTML = kind === 'reply'
+    ? `<input type="text" placeholder="field (e.g. Gn)" value="${r.field || ''}">
+       <input type="text" placeholder="bit" value="${bit}">
+       <input type="text" placeholder="signal" value="${r.signal || ''}">
+       <input type="checkbox" class="inv-check" title="Inverted" ${inv}>
+       <button class="btn-rm" onclick="this.closest('.sig-row').remove()">✕</button>`
+    : `<input type="text" placeholder="field (e.g. Fn)" value="${r.field || ''}">
+       <input type="text" placeholder="bit" value="${bit}">
+       <input type="text" placeholder="signal" value="${r.signal || ''}">
+       <span></span>
+       <button class="btn-rm" onclick="this.closest('.sig-row').remove()">✕</button>`;
+  return div;
+}
+
+function addSigRow(btn, kind) {
+  const container = btn.previousElementSibling;
+  container.appendChild(makeSigRow({field:'', bit:'', signal:'', inverted:false}, kind));
+}
+
+function addScn() {
+  document.getElementById('scned-body')
+    .appendChild(makeScnBlock({name:'', reply:[], control:[]}));
+}
+
+function collectScns() {
+  const scns = [];
+  for (const block of document.querySelectorAll('#scned-body .scn-ed-block')) {
+    const name   = block.querySelector('.scn-ed-name input').value.trim();
+    const reply  = [], control = [];
+    for (const row of block.querySelectorAll('.reply-rows .sig-row')) {
+      const inputs = row.querySelectorAll('input');
+      const field  = inputs[0].value.trim();
+      const bitStr = inputs[1].value.trim();
+      const signal = inputs[2].value.trim();
+      const inv    = inputs[3]?.checked || false;
+      if (field && signal)
+        reply.push({field, bit: bitStr !== '' ? parseInt(bitStr, 10) : null, signal, inverted: inv});
+    }
+    for (const row of block.querySelectorAll('.control-rows .sig-row')) {
+      const inputs = row.querySelectorAll('input');
+      const field  = inputs[0].value.trim();
+      const bitStr = inputs[1].value.trim();
+      const signal = inputs[2].value.trim();
+      if (field && signal)
+        control.push({field, bit: bitStr !== '' ? parseInt(bitStr, 10) : null, signal});
+    }
+    scns.push({name, reply, control});
+  }
+  return scns;
+}
+
+async function saveScns() {
+  const msgEl = document.getElementById('scned-msg');
+  msgEl.textContent = '';
+  const scns = collectScns();
+  try {
+    const r = await fetch('/api/ug405_scns', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(scns),
+    });
+    const d = await r.json();
+    msgEl.textContent = d.ok ? 'Saved.' : (d.detail || 'Error');
+    msgEl.className = 'cfg-msg ' + (d.ok ? 'ok' : 'err');
+  } catch (e) {
+    msgEl.textContent = e.message;
+    msgEl.className = 'cfg-msg err';
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 renderOpModeTransitions();
 loadMapping();
+loadScns();
 </script>
 </body>
 </html>

@@ -1263,3 +1263,66 @@ WebSocket connections survive tab switches.
 - Autodim BST fix applied in autodim.html
 - Config editors NOT yet written (next session start here)
 
+---
+
+## 2026-06-03 — Config editors: offline plan, SCN, RTIG, autodim
+
+### All 4 config editors ✓ COMPLETE
+
+**Built:**
+
+**`web/api/routes/config.py`** — new file, 4 editor backends:
+- `GET/POST /api/offline_plan_cfg` — reads offline_plan.json + ug405.cfg (for plan_cols);
+  writes plan JSON; pci.offline hot-reloads on file mtime change (no explicit reload needed)
+- `GET/POST /api/ug405_scns` — line-by-line parse of ug405.cfg (configparser cannot handle
+  multiple `[SCN]` sections); preserves header (lines before first `[SCN]`) and `[LIVE]` tail;
+  validates: each SCN must have a name, control signals must be unique across SCNs
+- `GET/POST /api/rtig_cfg` — reads rtig.cfg (lowercase section names `[rtig]`/`[signal_map]`
+  as configparser normalises them); writes preserving lowercase; uses `optionxform=str` to
+  preserve signal map key case (RTIG1 not rtig1)
+- `POST /api/rtig_rules` — validates (must be list, each must have `signal` key), writes
+  rtig_rules.json, sends `RELOAD_RULES` IPC command to pci.rtig via rtig_client
+- `GET/POST /api/autodim_cfg` — reads/writes autodim.cfg via configparser; on POST validates
+  lat (±90), lon (±180), offsets (±240 min); if enabled changed, sends `SET_ENABLED 0/1` IPC
+  to pci.autodim immediately; location/offset changes write file only (service restart required)
+
+**`web/api/app.py`** — config router imported, mounted at `/api` prefix; rtig/autodim clients
+wired to config module via `config_set_rtig()`/`config_set_autodim()`.
+
+**HTML editor sections added to 4 service pages:**
+- `autodim.html` — form editor: enabled toggle, lat/lon, dim/bright offset (min), IOBus signal.
+  Schedule label changed from "UTC" to "local time" (consistent with BST fix).
+  Note: "Location and offset changes take effect on service restart."
+- `rtig.html` — two panels: (1) editable signal map key→value table with add/remove rows +
+  Save; (2) JSON textarea for rules + Save & reload (triggers RELOAD_RULES hot-reload)
+- `ug405.html` — SCN editor: per-SCN block with name, reply rows (field/bit/signal/invert),
+  control rows (field/bit/signal). Add/remove rows per SCN. Add/remove SCNs.
+- `offline.html` — three-section editor: settings (base_time_mode/base_time/active_modes),
+  timetable (add/remove rows with days/start/plan), SCN plans as raw JSON textarea
+
+**Decisions:**
+- Config router mounted at prefix `/api` so routes are `/api/offline_plan_cfg` etc. (not `/api/config/...`)
+- rtig_rules POST path computed as `config/rtig_rules.json` relative to config dir — matches
+  how rtig/service.py resolves relative path from rtig.cfg directory
+- Offline plan SCN plans shown as raw JSON textarea — the plan offset data structure (fn/dn/sfn
+  bitmasks, go/mo/pv etc.) is engineering-level and not suited to a field form UI
+- `optionxform=str` on configparser for signal_map preserves RTIG1/RTIG2 key case
+- `_write_autodim_cfg` writes with alignment comments stripped (cleaner output than configparser default)
+
+**Test results:**
+- Import check: all modules clean
+- `GET /api/autodim_cfg` → correct JSON from autodim.cfg ✓
+- `GET /api/rtig_cfg` → correct JSON including signal_map with case-preserved keys ✓
+- `GET /api/ug405_scns` → 5 SCNs parsed correctly from ug405.cfg ✓
+- `GET /api/offline_plan_cfg` → settings/timetable/scns returned ✓
+- `POST /api/autodim_cfg` → file written with dim_offset=5, bright_offset=-10, restored ✓
+- `POST /api/rtig_rules` → rules written, returns `{"ok":true,"rules":1}`, restored ✓
+- `POST /api/ug405_scns` → round-trip (read→write same data) → ok, 5 SCNs preserved ✓
+- `POST /api/offline_plan_cfg` → file written ✓
+- All 4 service pages return HTTP 200 with editor sections rendered ✓
+
+**Outstanding:**
+- Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+  Read MICKS_MOVA_TOOLS_INFO_FOR_AML/ tcpdumps, read /opt/MOVA/pci_mova/protocol/mova_tools.py,
+  build mova/protocol/aml_server.py
+

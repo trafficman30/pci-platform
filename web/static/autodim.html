@@ -44,6 +44,20 @@
     .trans-dim    { color: var(--amber); font-weight: 600; font-family: var(--mono); }
     .trans-bright { color: var(--green); font-weight: 600; font-family: var(--mono); }
     .trans-arrow  { color: var(--muted); margin: 0 5px; }
+
+    /* Config editor */
+    .cfg-form { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px;
+                align-items: center; }
+    .cfg-form label { font-size: 11px; color: var(--muted); }
+    .cfg-form input[type=number], .cfg-form input[type=text] {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+      color: var(--fg); font-family: var(--mono); font-size: 12px;
+      padding: 4px 8px; width: 180px; }
+    .cfg-note { font-size: 11px; color: var(--amber); margin-top: 8px; }
+    .cfg-save { margin-top: 12px; }
+    .cfg-msg  { font-size: 11px; margin-left: 10px; }
+    .cfg-msg.ok  { color: var(--green); }
+    .cfg-msg.err { color: var(--error); }
   </style>
 </head>
 <body>
@@ -103,7 +117,7 @@
   </div>
 
   <!-- ── Today's schedule ── -->
-  <div class="section-title" style="margin-bottom:8px">Today's Schedule (UTC)</div>
+  <div class="section-title" style="margin-bottom:8px">Today's Schedule (local time)</div>
   <div class="panel" style="padding:0" id="sched-panel">
     <div class="sched-row">
       <div class="sched-label">Bright</div>
@@ -145,6 +159,38 @@
     <div class="section-title" style="margin-bottom:8px">Transitions (this session)</div>
     <div id="trans-log">
       <div class="no-content">No transitions since page load.</div>
+    </div>
+  </div>
+
+  <!-- ── Config editor ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Edit Configuration</div>
+    <div class="panel" style="padding:16px" id="cfg-editor">
+      <div class="no-content" id="cfg-loading">Loading…</div>
+      <form id="cfg-form" class="cfg-form" style="display:none" onsubmit="saveCfg(event)">
+        <label>Enabled</label>
+        <label class="toggle-sw" style="justify-self:start">
+          <input type="checkbox" id="cfg-enabled">
+          <span class="slider"></span>
+        </label>
+        <label>Latitude (−90 to +90)</label>
+        <input type="number" id="cfg-lat" step="0.0001" min="-90" max="90">
+        <label>Longitude (−180 to +180)</label>
+        <input type="number" id="cfg-lon" step="0.0001" min="-180" max="180">
+        <label>Dim offset (min, ±240)</label>
+        <input type="number" id="cfg-dim-off" step="1" min="-240" max="240">
+        <label>Bright offset (min, ±240)</label>
+        <input type="number" id="cfg-bright-off" step="1" min="-240" max="240">
+        <label>IOBus signal</label>
+        <input type="text" id="cfg-signal">
+        <div></div>
+        <div class="cfg-note">Location and offset changes take effect on service restart.</div>
+        <div></div>
+        <div class="cfg-save">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <span class="cfg-msg" id="cfg-msg"></span>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -314,6 +360,59 @@ function renderTransitions() {
   html += '</tbody></table></div>';
   el.innerHTML = html;
 }
+
+// ── Config editor ─────────────────────────────────────────────────────────────
+
+async function loadCfg() {
+  try {
+    const r = await fetch('/api/autodim_cfg');
+    const d = await r.json();
+    document.getElementById('cfg-enabled').checked   = !!d.enabled;
+    document.getElementById('cfg-lat').value          = d.lat;
+    document.getElementById('cfg-lon').value          = d.lon;
+    document.getElementById('cfg-dim-off').value      = d.dim_offset_minutes;
+    document.getElementById('cfg-bright-off').value   = d.bright_offset_minutes;
+    document.getElementById('cfg-signal').value       = d.signal;
+    document.getElementById('cfg-loading').style.display = 'none';
+    document.getElementById('cfg-form').style.display    = '';
+  } catch (e) {
+    document.getElementById('cfg-loading').textContent = 'Failed to load config: ' + e.message;
+  }
+}
+
+async function saveCfg(ev) {
+  ev.preventDefault();
+  const msgEl = document.getElementById('cfg-msg');
+  msgEl.textContent = '';
+  const body = {
+    enabled:               document.getElementById('cfg-enabled').checked,
+    lat:                   parseFloat(document.getElementById('cfg-lat').value),
+    lon:                   parseFloat(document.getElementById('cfg-lon').value),
+    dim_offset_minutes:    parseInt(document.getElementById('cfg-dim-off').value, 10),
+    bright_offset_minutes: parseInt(document.getElementById('cfg-bright-off').value, 10),
+    signal:                document.getElementById('cfg-signal').value.trim(),
+  };
+  try {
+    const r = await fetch('/api/autodim_cfg', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      msgEl.textContent = 'Saved.';
+      msgEl.className = 'cfg-msg ok';
+    } else {
+      msgEl.textContent = d.detail || 'Error';
+      msgEl.className = 'cfg-msg err';
+    }
+  } catch (e) {
+    msgEl.textContent = e.message;
+    msgEl.className = 'cfg-msg err';
+  }
+}
+
+loadCfg();
 
 // ── Enable toggle ─────────────────────────────────────────────────────────────
 

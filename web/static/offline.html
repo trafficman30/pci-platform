@@ -62,6 +62,31 @@
     }
     details summary:hover { color: var(--text); }
     details[open] summary { color: var(--accent2); }
+
+    /* Plan editor */
+    .pln-row { display: grid; grid-template-columns: 150px 1fr; gap: 6px 12px;
+               align-items: center; margin-bottom: 4px; }
+    .pln-row label { font-size: 11px; color: var(--muted); }
+    .pln-row input, .pln-row select {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+      color: var(--fg); font-family: var(--mono); font-size: 12px;
+      padding: 3px 8px; }
+    .tt-ed-row { display: grid; grid-template-columns: 80px 90px 120px 28px;
+                 gap: 4px 6px; align-items: center; margin-bottom: 4px; }
+    .tt-ed-row input { background: var(--bg); border: 1px solid var(--border);
+                       border-radius: 4px; color: var(--fg); font-family: var(--mono);
+                       font-size: 11px; padding: 2px 6px; width: 100%; min-width: 0; }
+    .btn-rm { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; }
+    .btn-rm:hover { color: var(--error); }
+    .cfg-msg  { font-size: 11px; margin-left: 10px; }
+    .cfg-msg.ok  { color: var(--green); }
+    .cfg-msg.err { color: var(--error); }
+    .plan-json-ta { width: 100%; min-height: 160px; background: var(--bg2);
+                    border: 1px solid var(--border); border-radius: 4px;
+                    color: var(--fg); font-family: var(--mono); font-size: 11px;
+                    padding: 8px; resize: vertical; box-sizing: border-box; }
+    .ed-sub { font-size: 10px; color: var(--muted); text-transform: uppercase;
+              letter-spacing: 0.05em; margin: 10px 0 4px; }
   </style>
 </head>
 <body>
@@ -137,6 +162,56 @@
   <div class="section-gap" style="display:flex;align-items:center;gap:12px">
     <button class="btn btn-log" id="btn-reload" onclick="reloadPlan()">Reload Plan File</button>
     <span id="reload-status" style="font-size:11px;color:var(--muted)"></span>
+  </div>
+
+  <!-- ── Plan editor ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Edit Plan Configuration</div>
+    <div class="panel" style="padding:16px">
+      <div class="no-content" id="pln-loading">Loading…</div>
+      <div id="pln-editor" style="display:none">
+
+        <!-- Settings -->
+        <div class="ed-sub" style="margin-top:0">Settings</div>
+        <div class="pln-row">
+          <label>Base time mode</label>
+          <select id="pln-btmode">
+            <option value="time">time</option>
+            <option value="datetime">datetime</option>
+            <option value="none">none</option>
+          </select>
+        </div>
+        <div class="pln-row">
+          <label>Base time (HHMM)</label>
+          <input type="text" id="pln-bt" placeholder="0000" maxlength="4" style="width:80px">
+        </div>
+        <div class="pln-row">
+          <label>Active in modes</label>
+          <input type="text" id="pln-modes" placeholder="e.g. 1,2" style="width:120px">
+        </div>
+
+        <!-- Timetable -->
+        <div class="ed-sub">Timetable</div>
+        <div id="pln-tt-rows"></div>
+        <button class="btn" style="font-size:11px;padding:2px 8px;margin-top:4px"
+                onclick="addTtRow()">+ Row</button>
+
+        <!-- SCN plans (JSON) -->
+        <div class="ed-sub">SCN Plans (JSON — edit raw plan data)</div>
+        <textarea class="plan-json-ta" id="pln-scns-ta" spellcheck="false"></textarea>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px">
+          Format: {"SCN_NAME": {"plans": {"P1": {"cycle_secs": 90, "offsets": []}, …}}, …}
+        </div>
+
+        <div style="margin-top:14px">
+          <button class="btn btn-primary" onclick="savePlan()">Save plan</button>
+          <span class="cfg-msg" id="pln-msg"></span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px">
+          Changes take effect immediately — pci.offline hot-reloads on file change.
+        </div>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -381,6 +456,113 @@ function connect() {
   };
 }
 connect();
+
+// ── Plan editor ───────────────────────────────────────────────────────────────
+
+let _planData = null;
+
+async function loadPlanCfg() {
+  try {
+    const r = await fetch('/api/offline_plan_cfg');
+    _planData = await r.json();
+    populatePlanEditor(_planData);
+  } catch (e) {
+    document.getElementById('pln-loading').textContent = 'Load failed: ' + e.message;
+  }
+}
+
+function populatePlanEditor(d) {
+  const s = d.settings || {};
+  const bm = document.getElementById('pln-btmode');
+  bm.value = s.base_time_mode || 'time';
+  document.getElementById('pln-bt').value    = s.base_time || '0000';
+  document.getElementById('pln-modes').value = (s.active_in_modes || [1, 2]).join(',');
+
+  // Timetable
+  const ttRows = document.getElementById('pln-tt-rows');
+  ttRows.innerHTML = '';
+  for (const entry of (d.timetable || [])) ttRows.appendChild(makeTtRow(entry));
+
+  // SCN plans — show raw JSON (scns object, just the plans part for each SCN)
+  const scnsForEdit = {};
+  for (const [name, scn] of Object.entries(d.scns || {})) {
+    scnsForEdit[name] = { plans: scn.plans || {} };
+  }
+  document.getElementById('pln-scns-ta').value = JSON.stringify(scnsForEdit, null, 2);
+
+  document.getElementById('pln-loading').style.display = 'none';
+  document.getElementById('pln-editor').style.display  = '';
+}
+
+function makeTtRow(entry) {
+  const div = document.createElement('div');
+  div.className = 'tt-ed-row';
+  const days  = (entry.days  || []).join(',');
+  const start = entry.start  || '0000';
+  const plan  = entry.plan   || '';
+  div.innerHTML = `
+    <input type="text" placeholder="days (M,T,W…)" value="${days}" title="Comma-separated day codes">
+    <input type="text" placeholder="start (HHMM)" value="${start}" maxlength="4">
+    <input type="text" placeholder="plan name" value="${plan}">
+    <button class="btn-rm" onclick="this.closest('.tt-ed-row').remove()">✕</button>`;
+  return div;
+}
+
+function addTtRow() {
+  document.getElementById('pln-tt-rows').appendChild(makeTtRow({days:[], start:'0000', plan:''}));
+}
+
+async function savePlan() {
+  const msgEl = document.getElementById('pln-msg');
+  msgEl.textContent = '';
+
+  // Settings
+  const modesRaw = document.getElementById('pln-modes').value.trim();
+  const modes    = modesRaw ? modesRaw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
+  const settings = {
+    base_time_mode: document.getElementById('pln-btmode').value,
+    base_time:      document.getElementById('pln-bt').value.trim(),
+    active_in_modes: modes,
+  };
+
+  // Timetable
+  const timetable = [];
+  for (const row of document.querySelectorAll('#pln-tt-rows .tt-ed-row')) {
+    const inputs = row.querySelectorAll('input');
+    const daysStr = inputs[0].value.trim();
+    const start   = inputs[1].value.trim().replace(':', '');
+    const plan    = inputs[2].value.trim();
+    const days    = daysStr ? daysStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+    timetable.push({ days, start, plan: plan || null });
+  }
+
+  // SCN plans
+  let scns;
+  try {
+    scns = JSON.parse(document.getElementById('pln-scns-ta').value);
+  } catch (e) {
+    msgEl.textContent = 'SCN JSON parse error: ' + e.message;
+    msgEl.className = 'cfg-msg err';
+    return;
+  }
+
+  const body = { settings, timetable, scns };
+  try {
+    const r = await fetch('/api/offline_plan_cfg', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    msgEl.textContent = d.ok ? 'Saved. pci.offline will hot-reload.' : (d.detail || 'Error');
+    msgEl.className = 'cfg-msg ' + (d.ok ? 'ok' : 'err');
+  } catch (e) {
+    msgEl.textContent = e.message;
+    msgEl.className = 'cfg-msg err';
+  }
+}
+
+loadPlanCfg();
 
 // ── Reload ────────────────────────────────────────────────────────────────────
 

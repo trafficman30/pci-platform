@@ -13,6 +13,9 @@ from pci.web.api.routes.iobus    import router as iobus_router
 from pci.web.api.routes.system   import router as system_router
 from pci.web.api.routes.mova     import router as mova_router,    set_registry as mova_set_reg
 from pci.web.api.routes.dataset  import router as dataset_router, set_registry as dataset_set_reg
+from pci.web.api.routes.config   import (router as config_router,
+                                         set_rtig_client    as config_set_rtig,
+                                         set_autodim_client as config_set_autodim)
 from pci.web.api.routes.ug405   import router as ug405_router,   set_client   as ug405_set_client
 from pci.web.api.routes.rtig    import router as rtig_router,    set_client   as rtig_set_client, create_receiver_app
 from pci.web.api.routes.autodim import router as autodim_router, set_client   as autodim_set_client
@@ -44,9 +47,11 @@ def create_app(registry, ug405_client=None, rtig_client=None,
     if rtig_client is not None:
         rtig_set_client(rtig_client)
         sse_set_rtig(rtig_client)
+        config_set_rtig(rtig_client)
     if autodim_client is not None:
         autodim_set_client(autodim_client)
         sse_set_autodim(autodim_client)
+        config_set_autodim(autodim_client)
     if offline_client is not None:
         offline_set_client(offline_client)
         sse_set_offline(offline_client)
@@ -69,6 +74,7 @@ def create_app(registry, ug405_client=None, rtig_client=None,
 
     app.include_router(system_router,  prefix="/api/system",   tags=["System"])
     app.include_router(dataset_router, prefix="/api/dataset",  tags=["Dataset"])
+    app.include_router(config_router,  prefix="/api",          tags=["Config"])
     app.include_router(iobus_router,   prefix="/api/iobus",   tags=["IOBus"])
     app.include_router(mova_router,    prefix="/api/mova",    tags=["MOVA"])
     app.include_router(ug405_router,   prefix="/api/ug405",   tags=["UG405"])

@@ -28,6 +28,22 @@
     /* TLP log: matched signals column */
     .tlp-sig     { font-family: var(--mono); font-size: 11px; color: var(--green); font-weight: 600; }
     .tlp-nomatch { font-family: var(--mono); font-size: 11px; color: var(--muted); font-style: italic; }
+
+    /* Config editors */
+    .sigmap-row { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+    .sigmap-row input { background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--fg); font-family: var(--mono); font-size: 12px;
+      padding: 3px 8px; width: 160px; }
+    .btn-rm { background: none; border: none; color: var(--muted); cursor: pointer;
+              font-size: 14px; padding: 0 4px; }
+    .btn-rm:hover { color: var(--error); }
+    .cfg-msg  { font-size: 11px; margin-left: 10px; }
+    .cfg-msg.ok  { color: var(--green); }
+    .cfg-msg.err { color: var(--error); }
+    .rules-ta { width: 100%; min-height: 200px; background: var(--bg2);
+                border: 1px solid var(--border); border-radius: 4px;
+                color: var(--fg); font-family: var(--mono); font-size: 12px;
+                padding: 8px; resize: vertical; box-sizing: border-box; }
   </style>
 </head>
 <body>
@@ -103,6 +119,35 @@
       <span id="reload-status" style="font-size:11px;color:var(--muted)"></span>
     </div>
     <div id="rules-info" style="font-size:12px;color:var(--muted);font-family:var(--mono)">—</div>
+  </div>
+
+  <!-- ── Signal map editor ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Edit Signal Map</div>
+    <div class="panel" style="padding:16px" id="sigmap-panel">
+      <div class="no-content" id="sigmap-loading">Loading…</div>
+      <div id="sigmap-rows" style="display:none"></div>
+      <div style="margin-top:8px;display:none" id="sigmap-btns">
+        <button class="btn" onclick="addSigmapRow()">+ Add row</button>
+        <button class="btn btn-primary" style="margin-left:6px" onclick="saveSigmap()">Save signal map</button>
+        <span class="cfg-msg" id="sigmap-msg"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Rules editor ── -->
+  <div class="section-gap">
+    <div class="section-title" style="margin-bottom:8px">Edit Rules (JSON)</div>
+    <div class="panel" style="padding:16px" id="rules-panel">
+      <div class="no-content" id="rules-loading">Loading…</div>
+      <div style="display:none" id="rules-editor">
+        <textarea class="rules-ta" id="rules-ta" spellcheck="false"></textarea>
+        <div style="margin-top:8px">
+          <button class="btn btn-primary" onclick="saveRules()">Save &amp; reload rules</button>
+          <span class="cfg-msg" id="rules-msg"></span>
+        </div>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -210,6 +255,107 @@ function connect() {
   };
 }
 connect();
+
+// ── Config editors ────────────────────────────────────────────────────────────
+
+let _cfgData = null;
+
+async function loadCfg() {
+  try {
+    const r = await fetch('/api/rtig_cfg');
+    _cfgData = await r.json();
+    renderSigmap(_cfgData.signal_map || {});
+    renderRulesEditor(_cfgData.rules || []);
+  } catch (e) {
+    document.getElementById('sigmap-loading').textContent = 'Load failed: ' + e.message;
+    document.getElementById('rules-loading').textContent  = 'Load failed: ' + e.message;
+  }
+}
+
+function renderSigmap(map) {
+  const container = document.getElementById('sigmap-rows');
+  container.innerHTML = '';
+  for (const [name, sig] of Object.entries(map)) {
+    container.appendChild(makeSigmapRow(name, sig));
+  }
+  document.getElementById('sigmap-loading').style.display = 'none';
+  container.style.display = '';
+  document.getElementById('sigmap-btns').style.display = '';
+}
+
+function makeSigmapRow(name, sig) {
+  const div = document.createElement('div');
+  div.className = 'sigmap-row';
+  div.innerHTML = `
+    <input type="text" placeholder="Name (e.g. RTIG1)" value="${name}" class="sm-name">
+    <span style="color:var(--muted);font-size:12px">→</span>
+    <input type="text" placeholder="Signal (e.g. virt.10)" value="${sig}" class="sm-sig">
+    <button class="btn-rm" onclick="this.closest('.sigmap-row').remove()">✕</button>`;
+  return div;
+}
+
+function addSigmapRow() {
+  document.getElementById('sigmap-rows').appendChild(makeSigmapRow('', ''));
+}
+
+async function saveSigmap() {
+  const rows    = document.querySelectorAll('#sigmap-rows .sigmap-row');
+  const signal_map = {};
+  for (const row of rows) {
+    const name = row.querySelector('.sm-name').value.trim();
+    const sig  = row.querySelector('.sm-sig').value.trim();
+    if (name && sig) signal_map[name] = sig;
+  }
+  const msgEl = document.getElementById('sigmap-msg');
+  msgEl.textContent = '';
+  try {
+    const r = await fetch('/api/rtig_cfg', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ signal_map, settings: _cfgData?.settings || {} }),
+    });
+    const d = await r.json();
+    msgEl.textContent = d.ok ? 'Saved.' : (d.detail || 'Error');
+    msgEl.className = 'cfg-msg ' + (d.ok ? 'ok' : 'err');
+  } catch (e) {
+    msgEl.textContent = e.message;
+    msgEl.className = 'cfg-msg err';
+  }
+}
+
+function renderRulesEditor(rules) {
+  document.getElementById('rules-ta').value = JSON.stringify(rules, null, 2);
+  document.getElementById('rules-loading').style.display = 'none';
+  document.getElementById('rules-editor').style.display  = '';
+}
+
+async function saveRules() {
+  const msgEl = document.getElementById('rules-msg');
+  msgEl.textContent = '';
+  let rules;
+  try {
+    rules = JSON.parse(document.getElementById('rules-ta').value);
+  } catch (e) {
+    msgEl.textContent = 'JSON parse error: ' + e.message;
+    msgEl.className = 'cfg-msg err';
+    return;
+  }
+  try {
+    const r = await fetch('/api/rtig_rules', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(rules),
+    });
+    const d = await r.json();
+    msgEl.textContent = d.ok ? `Saved (${d.rules} rules). Hot-reloaded.` : (d.detail || 'Error');
+    msgEl.className = 'cfg-msg ' + (d.ok ? 'ok' : 'err');
+  } catch (e) {
+    msgEl.textContent = e.message;
+    msgEl.className = 'cfg-msg err';
+  }
+}
+
+loadCfg();
 
 // ── Reload rules ──────────────────────────────────────────────────────────────
 
