@@ -1011,3 +1011,42 @@ ug405.html, iobus.html, rtig.html, autodim.html, offline.html, agd.html, flir.ht
 **Outstanding:**
 - Issue 1: /api/dataset/ router — list, upload, delete, load, info, detail endpoints
 - Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+
+---
+
+## 2026-06-03 — Systemd units: full stack one-command start
+
+### Task — write and install systemd units for all services
+
+**Built:**
+- `/etc/systemd/system/pci-iobus.service`
+- `/etc/systemd/system/pci-mova-kernel@.service` (template, replaces old `/opt/MC_MOVA` unit)
+- `/etc/systemd/system/pci-ug405.service`
+- `/etc/systemd/system/pci-rtig.service`
+- `/etc/systemd/system/pci-autodim.service`
+- `/etc/systemd/system/pci-offline.service`
+- `/etc/systemd/system/pci-web.service`
+
+**Decisions:**
+- `PYTHONPATH=/opt` in every unit — required so `import pci.*` resolves.
+- Venv path: `/opt/pci/venv/bin/python` — shared venv, all services.
+- `WorkingDirectory=/opt/pci` — config files resolve from project root.
+- `PCI_WEB_PORT=8082` in pci-web.service — 8080 occupied by CM5 monolith, 8081 also in use.
+- `Restart=on-failure` — clean exit (e.g. unlicensed MOVA stream) does not loop.
+- `After=pci-iobus.service` on all service units — ensures ordering when started together.
+- `pci-web.service` has `Wants=` all other units — starting web pulls up the full stack.
+- `pci-offline.service` also has `After=pci-ug405.service` — reads opMode from ug405 IPC.
+- Memory limits set per service (iobus 256M, mova@N 384M, web 256M, others 128M).
+- `pci-mova-kernel@.service` template overwrites the old unit pointing to `/opt/MC_MOVA`.
+
+**Test results — all services active (running):**
+- `systemctl start pci-iobus` → active
+- `systemctl start pci-mova-kernel@0` (2s after iobus) → active
+- `systemctl start pci-ug405 pci-rtig pci-autodim pci-offline pci-web` → all active
+- `systemctl status pci-web`: all IPC clients connected (mova@0, ug405, rtig, autodim, offline)
+- `curl http://localhost:8082/api/mova/streams` → `{"streams":[0]}` ✓
+- All 7 services enabled via `systemctl enable`; `pci-mova-kernel@0` enabled separately.
+
+**Outstanding:**
+- Issue 1: /api/dataset/ router — list, upload, delete, load, info, detail endpoints
+- Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
