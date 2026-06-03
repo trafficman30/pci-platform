@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOVA Errors</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* height:100vh required — flex scroll layout
+       breaks with pci.css min-height:100vh */
+    body { height: 100vh; }
+
+    /* popup header overrides */
+    .logo-mark { width: 24px; height: 24px; }
+    .logo-text { font-size: 14px; letter-spacing: 0; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .stream-label { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.55); }
+
+    .content { display: flex; flex-direction: column; flex: 1; overflow: hidden; gap: 0; }
+
+    /* ── Active faults ── */
+    .active-section {
+      background: #fff5f5;
+      border-bottom: 2px solid var(--red);
+      padding: 10px 16px;
+      flex-shrink: 0;
+    }
+    /* pci.css .section-title: font-size:11px, color:var(--muted) — override for fault label */
+    .section-title {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 6px;
+    }
+    .active-none { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .active-fault {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 3px 0;
+      color: var(--red);
+    }
+    .active-fault .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); animation: blink 1s step-end infinite; flex-shrink: 0; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── History table ── */
+    .history-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .history-title {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 8px 16px 4px;
+      flex-shrink: 0;
+    }
+    .history-scroll { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
+
+    table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+    thead th {
+      text-align: left;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg3);
+      position: sticky;
+      top: 0;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:hover { background: var(--bg3); }
+    tbody td { padding: 5px 8px; vertical-align: top; }
+
+    .col-time   { width: 80px;  color: var(--muted); }
+    .col-type   { width: 80px; }
+    .col-label  { }
+    .col-data   { width: 60px;  color: var(--muted); text-align: right; }
+    .col-status { width: 70px;  text-align: center; }
+
+    /* pci.css .badge: display:inline-flex, font-size:10px, padding:2px 8px — override for fault table */
+    .badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 10px;
+      letter-spacing: .04em;
+    }
+    .badge-ids    { background: #fef3c7; color: #92400e; }
+    .badge-status { background: #dbeafe; color: #1e40af; }
+    .badge-ph     { background: #ede9fe; color: #5b21b6; }
+    .badge-info   { background: #f1f5f9; color: var(--muted); }
+    .badge-other  { background: var(--bg3); color: var(--muted); }
+
+    .status-active  { color: var(--red);   font-weight: 700; }
+    .status-cleared { color: var(--green); }
+
+    .empty { font-family: var(--mono); font-size: 11px; color: var(--muted); padding: 20px 0; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-mark"></div>
+      <span class="logo-text">MOVA Errors</span>
+    </div>
+    <div class="header-right">
+      <span class="stream-label" id="stream-label">Stream —</span>
+      <div class="conn-dot" id="conn-dot"></div>
+    </div>
+  </header>
+
+  <div class="content">
+    <div class="active-section">
+      <div class="section-title">Active Faults</div>
+      <div id="active-faults"><span class="active-none">No active faults</span></div>
+    </div>
+
+    <div class="history-section">
+      <div class="history-title">Fault History (newest first)</div>
+      <div class="history-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-time">Time</th>
+              <th class="col-type">Type</th>
+              <th class="col-label">Label</th>
+              <th class="col-data">Data</th>
+              <th class="col-status">Status</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr><td colspan="5" class="empty">No fault history</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params   = new URLSearchParams(location.search);
+    const streamId = parseInt(params.get('stream') || '0', 10);
+    const dispId   = streamId + 1;
+
+    document.getElementById('stream-label').textContent = `Stream ${dispId}`;
+    document.title = `MOVA Errors — Stream ${dispId}`;
+
+    const dot = document.getElementById('conn-dot');
+
+    function fmtTime(ts) {
+      const d = new Date(ts * 1000);
+      return d.toTimeString().slice(0, 8);
+    }
+
+    function typeBadge(type) {
+      if (type === 'IDS')        return `<span class="badge badge-ids">IDS</span>`;
+      if (type === 'STATUS')     return `<span class="badge badge-status">STATUS</span>`;
+      if (type === 'PHONE_HOME') return `<span class="badge badge-ph">PHONE HOME</span>`;
+      if (type === 'INFO')       return `<span class="badge badge-info">INFO</span>`;
+      return `<span class="badge badge-other">${type}</span>`;
+    }
+
+    function render(data) {
+      const activeEl = document.getElementById('active-faults');
+      if (!data.active || data.active.length === 0) {
+        activeEl.innerHTML = '<span class="active-none">No active faults</span>';
+      } else {
+        activeEl.innerHTML = data.active.map(f =>
+          `<div class="active-fault"><div class="dot"></div>${f.label}${f.data ? ` (${f.data})` : ''} — since ${fmtTime(f.timestamp)}</div>`
+        ).join('');
+      }
+
+      const tbody = document.getElementById('history-body');
+      const history = (data.history || []).slice().reverse();
+      if (history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">No fault history</td></tr>';
+        return;
+      }
+      tbody.innerHTML = history.map(f => `
+        <tr>
+          <td class="col-time">${fmtTime(f.timestamp)}</td>
+          <td class="col-type">${typeBadge(f.type)}</td>
+          <td class="col-label">${f.label}</td>
+          <td class="col-data">${f.data || ''}</td>
+          <td class="col-status ${f.cleared ? 'status-cleared' : 'status-active'}">${f.cleared ? 'Cleared' : 'ACTIVE'}</td>
+        </tr>`).join('');
+    }
+
+    function connect() {
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws/errors/${streamId}`);
+
+      ws.onopen  = () => { dot.className = 'conn-dot live'; };
+      ws.onmessage = (ev) => { try { render(JSON.parse(ev.data)); } catch(e) {} };
+      ws.onclose = () => { dot.className = 'conn-dot error'; setTimeout(connect, 3000); };
+      ws.onerror = () => ws.close();
+    }
+
+    connect();
+  </script>
+</body>
+</html>

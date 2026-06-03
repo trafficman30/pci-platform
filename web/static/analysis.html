@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOVA Analysis</title>
+<link rel="stylesheet" href="css/pci.css">
+<style>
+/* height:100vh required — flex scroll layout
+   breaks with pci.css min-height:100vh */
+body { height: 100vh; overflow: hidden; }
+
+/* popup header overrides — analysis uses 18px logo */
+header { gap: 12px; padding: 0 16px; flex-shrink: 0; }
+.logo-mark { width: 18px; height: 18px; }
+.logo-text { font-size: 14px; letter-spacing: 0; }
+
+.hdr-sep{width:1px;height:20px;background:rgba(255,255,255,.2);flex-shrink:0}
+.hdr-sel{background:#253a5e;border:1px solid rgba(255,255,255,.2);color:#fff;font-family:var(--mono);font-size:11px;padding:3px 7px;border-radius:3px;height:26px}
+.hdr-btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:3px;padding:4px 10px;font-size:11px;cursor:pointer;height:26px;font-family:var(--mono)}
+.hdr-btn:hover{background:rgba(255,255,255,.22)}
+.hdr-btn.accent{background:var(--accent);border-color:var(--accent);color:#000}
+.hdr-btn.accent:hover{background:#00bbee}
+#hdr-status{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.5);margin-left:auto}
+/* ── Data source bar ── */
+.src-bar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex-shrink:0}
+.src-group{display:flex;align-items:center;gap:6px}
+.src-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+input[type=date],input[type=text],.src-input{font-family:var(--mono);font-size:11px;border:1px solid var(--border);border-radius:3px;padding:3px 7px;background:var(--bg3);color:var(--text);height:26px}
+.src-btn{padding:3px 10px;background:var(--topbar);color:#fff;border:none;border-radius:3px;font-family:var(--mono);font-size:11px;cursor:pointer;height:26px;white-space:nowrap}
+.src-btn:hover{background:#253a5e}
+.src-btn.green{background:var(--green)}
+.src-btn.green:hover{background:#166534}
+.src-sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
+.filter-pills{display:flex;gap:4px;align-items:center}
+.filter-pill{padding:2px 9px;border-radius:10px;border:1px solid var(--border);font-size:10px;font-weight:600;font-family:var(--mono);cursor:pointer;background:var(--bg3);color:var(--muted);transition:all .15s}
+.filter-pill.active{background:var(--topbar);color:#fff;border-color:var(--topbar)}
+/* ── Site bar ── */
+.site-bar{background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:6px 16px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap}
+.site-bar .src-label{color:#1e40af}
+#site-name{width:200px}
+#site-select{font-family:var(--mono);font-size:11px;border:1px solid #bfdbfe;border-radius:3px;padding:3px 7px;background:#fff;color:var(--text);height:26px}
+.site-info{font-family:var(--mono);font-size:10px;color:#1e40af;margin-left:auto}
+/* ── Timeline ── */
+.timeline-wrap{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px 6px;flex-shrink:0}
+#timeline-svg{width:100%;height:56px;display:block;cursor:crosshair}
+.tl-controls{display:flex;gap:6px;margin-top:4px;align-items:center}
+.tl-btn{padding:2px 8px;font-family:var(--mono);font-size:10px;background:var(--bg3);border:1px solid var(--border);border-radius:3px;cursor:pointer}
+.tl-btn:hover{background:var(--border)}
+#cursor-time{font-family:var(--mono);font-size:11px;color:var(--topbar);font-weight:600;margin-left:auto}
+/* ── Tabs ── */
+.tabs{display:flex;gap:1px;background:var(--border);flex-shrink:0}
+.tab-btn{padding:7px 14px;font-size:11px;font-weight:600;background:var(--bg3);border:none;cursor:pointer;letter-spacing:.04em;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.tab-btn:hover{background:var(--bg2);color:var(--text)}
+.tab-btn.active{background:var(--bg2);color:var(--topbar);border-bottom-color:var(--accent)}
+/* ── Content ── */
+.tab-content{flex:1;overflow-y:auto;padding:14px 16px}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+.empty{color:var(--muted);font-style:italic;padding:24px 0;text-align:center}
+/* ── Shared section styles ── */
+.section-title{font-size:12px;font-weight:700;color:var(--topbar);margin:0 0 8px;padding-bottom:5px;border-bottom:2px solid var(--accent);letter-spacing:.04em}
+table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px}
+th{background:var(--bg3);border:1px solid var(--border);padding:4px 8px;text-align:left;font-weight:600;color:var(--topbar);font-size:10px;white-space:nowrap}
+td{border:1px solid var(--border);padding:3px 8px;vertical-align:top}
+tr:nth-child(even) td{background:#fafbfc}
+.mono{font-family:var(--mono)}
+/* ── Det counts ── */
+.dc-table td,.dc-table th{font-family:var(--mono);text-align:right}
+.dc-table td:first-child,.dc-table th:first-child{text-align:left}
+.dc-warn{color:var(--amber);font-weight:700}
+/* ── Lane cards ── */
+.lane-cards{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.lane-card{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:8px 10px;min-width:80px;text-align:center}
+.lane-card.high{border-color:var(--amber);background:#fffbeb}
+.lane-num{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px}
+.lane-flow{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--topbar)}
+.lane-unit{font-size:9px;color:var(--muted);margin-top:1px}
+.lane-bar{height:3px;background:var(--border);border-radius:2px;margin-top:5px}
+.lane-bar-fill{height:100%;background:var(--accent);border-radius:2px}
+/* ── Opt panel ── */
+.opt-panel{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px 12px;margin-bottom:12px}
+.opt-grid{display:flex;gap:16px;flex-wrap:wrap}
+.opt-item{display:flex;flex-direction:column;gap:2px}
+.opt-item label{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.opt-item span{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--topbar)}
+.sf-title{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:10px 0 6px}
+/* ── Messages ── */
+.msg-row{display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--border);font-size:11px}
+.msg-ts{font-family:var(--mono);font-size:10px;color:var(--muted);flex-shrink:0;width:70px}
+.msg-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;white-space:nowrap;flex-shrink:0;font-family:var(--mono)}
+.msg-b1{background:#d1fae5;color:#065f46}
+.msg-b2{background:#dbeafe;color:#1e40af}
+.msg-b3{background:#fef3c7;color:#92400e}
+.msg-b4{background:#ede9fe;color:#5b21b6}
+.msg-b5{background:#fee2e2;color:#991b1b}
+.msg-b6{background:#f3f4f6;color:#374151}
+.msg-desc{font-family:var(--mono);font-size:10px;color:var(--text);flex:1;word-break:break-all}
+/* ── Errors ── */
+.err-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.err-ids{background:#fef3c7;color:#92400e}
+.err-info{background:#f3f4f6;color:#374151}
+.err-status{background:#dbeafe;color:#1e40af}
+/* ── TMA ── */
+.tma-table{font-family:var(--mono);font-size:11px}
+.tma-table th,.tma-table td{padding:3px 8px}
+/* ── Drop zone ── */
+.drop-zone{border:2px dashed var(--border);border-radius:5px;padding:12px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg3);font-size:12px;color:var(--muted)}
+.drop-zone:hover,.drop-zone.over{border-color:var(--accent);background:#f0f9ff;color:var(--topbar)}
+/* ── SAM View panels ── */
+.sam-wrap{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:1100px}
+@media(max-width:700px){.sam-wrap{grid-template-columns:1fr}}
+.sam-panel{background:var(--bg2);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.sam-panel-hdr{background:var(--topbar);color:#fff;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px}
+.sam-panel-body{padding:10px 12px}
+.sam-badges{display:flex;gap:6px;flex-wrap:wrap}
+.sam-badge{padding:3px 10px;border-radius:3px;font-size:11px;font-weight:700;font-family:var(--mono);letter-spacing:.04em}
+.sam-ok   {background:#d1fae5;color:#065f46}
+.sam-warn {background:#fef3c7;color:#92400e}
+.sam-err  {background:#fee2e2;color:#991b1b}
+.sam-off  {background:#f3f4f6;color:#9ca3af}
+.sam-info {background:#dbeafe;color:#1e40af}
+.sam-fields{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-top:8px}
+.sam-field{display:flex;flex-direction:column;gap:1px}
+.sam-field label{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.sam-field span{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--topbar)}
+.sam-bar-wrap{margin-top:8px}
+.sam-bar-lbl{font-size:9px;color:var(--muted);margin-bottom:2px}
+.sam-bar-track{height:8px;background:var(--border);border-radius:4px;overflow:hidden;position:relative}
+.sam-bar-tig{height:100%;background:var(--accent);border-radius:4px;transition:width .3s}
+.sam-bar-smin{position:absolute;top:0;bottom:0;width:2px;background:var(--amber);border-radius:1px}
+.sam-bar-dmx{position:absolute;top:0;bottom:0;width:2px;background:var(--red);border-radius:1px}
+.sam-lean{display:inline-block;padding:4px 14px;border-radius:4px;font-size:12px;font-weight:700;font-family:var(--mono);margin-top:8px;letter-spacing:.04em}
+.sam-lean-ext{background:#d1fae5;color:#065f46}
+.sam-lean-chg{background:#fee2e2;color:#991b1b}
+.sam-lean-neu{background:#f3f4f6;color:#6b7280}
+.sam-link-table{width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono);margin-top:6px}
+.sam-link-table th{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:3px 6px;border-bottom:1px solid var(--border);text-align:right}
+.sam-link-table th:first-child{text-align:left}
+.sam-link-table td{padding:3px 6px;border-bottom:1px solid var(--bg3);text-align:right}
+.sam-link-table td:first-child{text-align:left;font-weight:600}
+.sam-link-table tr:hover td{background:var(--bg3)}
+.sam-sus{color:var(--amber);font-weight:700}
+.sam-cursor-bar{background:#ecfeff;border-bottom:1px solid #bae6fd;padding:4px 12px;font-family:var(--mono);font-size:11px;color:#0e7490;display:flex;align-items:center;gap:10px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <span class="logo-text">MOVA Analysis</span>
+  </div>
+  <div class="hdr-sep"></div>
+  <span class="src-label" style="color:rgba(255,255,255,.5)">STREAM</span>
+  <select class="hdr-sel" id="stream-sel">
+    <option value="0">Stream 1</option><option value="1">Stream 2</option>
+    <option value="2">Stream 3</option><option value="3">Stream 4</option>
+    <option value="4">Stream 5</option><option value="5">Stream 6</option>
+    <option value="6">Stream 7</option><option value="7">Stream 8</option>
+  </select>
+  <div class="hdr-sep"></div>
+  <button class="hdr-btn accent" onclick="openHistory()">&#x1F4C2; History</button>
+  <span id="hdr-status">No data loaded</span>
+</header>
+
+<!-- Data source bar -->
+<div class="src-bar">
+  <span class="src-label">API</span>
+  <input type="date" id="api-from" class="src-input">
+  <span style="font-size:11px;color:var(--muted)">→</span>
+  <input type="date" id="api-to" class="src-input">
+  <button class="src-btn" onclick="loadFromAPI()">Load Range</button>
+  <button class="src-btn" onclick="exportRange()" title="Download gzipped JSONL">Export .gz</button>
+  <div class="src-sep"></div>
+  <span class="src-label">FILE</span>
+  <button class="src-btn" onclick="document.getElementById('file-in').click()">Load .jsonl.gz</button>
+  <input type="file" id="file-in" accept=".jsonl,.jsonl.gz,.gz" style="display:none">
+  <div class="src-sep"></div>
+  <span class="src-label">SHOW</span>
+  <div class="filter-pills">
+    <div class="filter-pill active" data-type="msg"  onclick="toggleFilter(this)">Messages</div>
+    <div class="filter-pill active" data-type="tma"  onclick="toggleFilter(this)">Det/Flows</div>
+    <div class="filter-pill active" data-type="err"  onclick="toggleFilter(this)">Errors</div>
+    <div class="filter-pill active" data-type="hb"   onclick="toggleFilter(this)">Heartbeats</div>
+  </div>
+</div>
+
+<!-- Site persistence bar -->
+<div class="site-bar">
+  <span class="src-label">SITE</span>
+  <input type="text" id="site-name" class="src-input" placeholder="e.g. GoodwoodRd S1" style="width:200px">
+  <button class="src-btn green" onclick="saveSite()">Save</button>
+  <button class="src-btn" onclick="loadSite()">Load</button>
+  <select id="site-select"><option value="">— saved sites —</option></select>
+  <button class="src-btn" onclick="deleteSite()" style="background:#dc2626">Delete</button>
+  <span class="site-info" id="site-info"></span>
+</div>
+
+<!-- Timeline -->
+<div class="timeline-wrap">
+  <svg id="timeline-svg"></svg>
+  <div class="tl-controls">
+    <button class="tl-btn" onclick="moveCursor(-3600)">◀◀ −1h</button>
+    <button class="tl-btn" onclick="moveCursor(-300)">◀ −5m</button>
+    <button class="tl-btn" onclick="moveCursor(300)">+5m ▶</button>
+    <button class="tl-btn" onclick="moveCursor(3600)">+1h ▶▶</button>
+    <button class="tl-btn" onclick="setCursorEnd()">End ▶▶</button>
+    <div style="width:1px;height:16px;background:var(--border);margin:0 2px"></div>
+    <button class="tl-btn" id="play-btn" onclick="togglePlay()" style="min-width:52px">▶ Play</button>
+    <select id="play-speed" class="tl-btn" style="cursor:pointer">
+      <option value="1">1×</option>
+      <option value="5">5×</option>
+      <option value="10" selected>10×</option>
+      <option value="30">30×</option>
+      <option value="60">60×</option>
+      <option value="300">5min/s</option>
+    </select>
+    <span id="cursor-time">—</span>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn" data-tab="samview" style="color:#0e7490;font-weight:700">&#9654; SAM View</button>
+  <button class="tab-btn active" data-tab="messages">Messages</button>
+  <button class="tab-btn" data-tab="tma">TMA Logs</button>
+  <button class="tab-btn" data-tab="satflow">Sat Flow</button>
+  <button class="tab-btn" data-tab="detcounts">Det Counts</button>
+  <button class="tab-btn" data-tab="derived">Derived</button>
+  <button class="tab-btn" data-tab="errors">Errors</button>
+</div>
+
+<div class="tab-content">
+  <div id="tab-samview"   class="tab-pane"><div class="empty">Load data to begin.</div></div>
+  <div id="tab-messages"  class="tab-pane active"><div class="empty">Load data to begin.</div></div>
+  <div id="tab-tma"       class="tab-pane"><div class="empty">Load data to begin.</div></div>
+  <div id="tab-satflow"   class="tab-pane"><div class="empty">Load data to begin.</div></div>
+  <div id="tab-detcounts" class="tab-pane"><div class="empty">Load data to begin.</div></div>
+  <div id="tab-derived"   class="tab-pane"><div class="empty">Load data to begin.</div></div>
+  <div id="tab-errors"    class="tab-pane"><div class="empty">Load data to begin.</div></div>
+</div>
+
+<script>
+'use strict';
+const API = location.origin;
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let records      = [];   // all loaded records (merged, deduped)
+let msgRecs      = [];
+let errRecs      = [];
+let hbRecs       = [];
+let tmaRecs_all  = [];
+let dims         = {no_links:0,no_lanes:0,no_stages:0,no_dets:0};
+let detectorMeta = [];
+let rangeMin = 0, rangeMax = 0, cursorTs = 0;
+let activeTab = 'messages';
+let dragging  = false;
+let svgW      = 0;
+let activeFilters = new Set(['msg','tma','err','hb']);
+
+// ── Tab switching ──────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    activeTab = btn.dataset.tab;
+    document.getElementById(`tab-${activeTab}`).classList.add('active');
+    renderActiveTab();
+  });
+});
+
+// ── Filter pills ───────────────────────────────────────────────────────────────
+function toggleFilter(el) {
+  const type = el.dataset.type;
+  if (activeFilters.has(type)) { activeFilters.delete(type); el.classList.remove('active'); }
+  else                         { activeFilters.add(type);    el.classList.add('active');    }
+  renderActiveTab();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function h(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtTs(ts){ if(!ts) return '—'; const d=new Date(ts*1000); return d.toTimeString().slice(0,8); }
+function fmtDate(ts){ if(!ts) return '—'; return new Date(ts*1000).toLocaleDateString(); }
+function lastAtTs(arr,ts){ let r=null; for(const x of arr){if(x.ts<=ts)r=x; else break;} return r; }
+function allUpTo(arr,ts){ return arr.filter(r=>r.ts<=ts); }
+
+// ── Ingest records ─────────────────────────────────────────────────────────────
+function ingestLines(lines) {
+  const seen   = new Set(records.map(r => JSON.stringify(r)));
+  let added = 0;
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      const rec = JSON.parse(t);
+      const key = JSON.stringify(rec);
+      if (!seen.has(key)) { seen.add(key); records.push(rec); added++; }
+    } catch(_) {}
+  }
+  rebuildIndexes();
+  return added;
+}
+
+function rebuildIndexes() {
+  records.sort((a,b) => (a.ts||0) - (b.ts||0));
+  msgRecs     = records.filter(r => r.t === 'msg');
+  errRecs     = records.filter(r => r.t === 'err');
+  hbRecs      = records.filter(r => r.t === 'hb' );
+  tmaRecs_all = records.filter(r => r.t === 'tma');
+
+  // Dimensions from latest session record
+  for (const rec of records) {
+    if (rec.t === 'session') {
+      dims = {no_links:rec.nl||0, no_lanes:rec.nla||0,
+              no_stages:rec.ns||0, no_dets:rec.nd||0};
+      if (rec.dm) detectorMeta = rec.dm;
+    }
+  }
+
+  const allTs = records.map(r=>r.ts).filter(Boolean);
+  rangeMin = allTs.length ? Math.min(...allTs) : 0;
+  rangeMax = allTs.length ? Math.max(...allTs) : 0;
+  if (!cursorTs || cursorTs < rangeMin || cursorTs > rangeMax) cursorTs = rangeMax;
+}
+
+function updateStatus() {
+  const stream  = parseInt(document.getElementById('stream-sel').value, 10);
+  const fromDt  = rangeMin ? new Date(rangeMin*1000).toLocaleDateString() : '—';
+  const toDt    = rangeMax ? new Date(rangeMax*1000).toLocaleDateString() : '—';
+  document.getElementById('hdr-status').textContent =
+    records.length
+      ? `S${stream+1} · ${records.length.toLocaleString()} records · ${fromDt}${fromDt!==toDt?' → '+toDt:''}`
+      : 'No data loaded';
+}
+
+// ── API loading ────────────────────────────────────────────────────────────────
+async function loadFromAPI() {
+  const stream  = parseInt(document.getElementById('stream-sel').value, 10);
+  const fromVal = document.getElementById('api-from').value;
+  const toVal   = document.getElementById('api-to').value   || fromVal;
+  if (!fromVal) { alert('Select a from date'); return; }
+
+  document.getElementById('hdr-status').textContent = 'Loading from API…';
+
+  // Enumerate dates in range
+  const dates = [];
+  let d = new Date(fromVal + 'T00:00:00');
+  const end = new Date(toVal + 'T00:00:00');
+  while (d <= end) { dates.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+
+  let totalAdded = 0;
+  for (const date of dates) {
+    try {
+      const resp = await fetch(`${API}/api/streams/${stream}/log/slice?date=${date}`);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      if (data.detector_meta?.length) detectorMeta = data.detector_meta;
+      // Merge dimensions from API response
+      if (data.dimensions?.no_lanes > 0) dims = data.dimensions;
+      // Add raw records
+      const lines = (data.records||[]).map(r => JSON.stringify(r));
+      totalAdded += ingestLines(lines);
+    } catch(_) {}
+  }
+
+  document.getElementById('hdr-status').textContent = `Added ${totalAdded} new records`;
+  updateStatus();
+  drawTimeline();
+  renderActiveTab();
+}
+
+// ── File loading ───────────────────────────────────────────────────────────────
+document.getElementById('file-in').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+  await loadFile(file);
+});
+
+async function loadFile(file) {
+  document.getElementById('hdr-status').textContent = `Reading ${file.name}…`;
+  try {
+    let text;
+    if (file.name.endsWith('.gz')) {
+      const ds  = new DecompressionStream('gzip');
+      const out = file.stream().pipeThrough(ds);
+      const buf = [];
+      const reader = out.getReader();
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf.push(value);
+      }
+      const merged = new Uint8Array(buf.reduce((acc,v)=>acc+v.length,0));
+      let offset = 0;
+      for (const v of buf) { merged.set(v, offset); offset += v.length; }
+      text = new TextDecoder().decode(merged);
+    } else {
+      text = await file.text();
+    }
+    const lines = text.split('\n');
+    const added = ingestLines(lines);
+    document.getElementById('hdr-status').textContent = `${file.name}: +${added} records`;
+    updateStatus();
+    drawTimeline();
+    renderActiveTab();
+  } catch(e) {
+    document.getElementById('hdr-status').textContent = `Error: ${e.message}`;
+  }
+}
+
+// Drop zone on tab content
+const tabContent = document.querySelector('.tab-content');
+tabContent.addEventListener('dragover', e => { e.preventDefault(); tabContent.style.outline='2px dashed var(--accent)'; });
+tabContent.addEventListener('dragleave', () => tabContent.style.outline='');
+tabContent.addEventListener('drop', async e => {
+  e.preventDefault(); tabContent.style.outline='';
+  const file = e.dataTransfer.files[0];
+  if (file) await loadFile(file);
+});
+
+// ── Export ─────────────────────────────────────────────────────────────────────
+function exportRange() {
+  const stream  = parseInt(document.getElementById('stream-sel').value, 10);
+  const fromVal = document.getElementById('api-from').value;
+  const toVal   = document.getElementById('api-to').value;
+  if (!fromVal) { alert('Select a from date for export'); return; }
+  let url = `${API}/api/streams/${stream}/log/export?from_date=${fromVal}`;
+  if (toVal && toVal !== fromVal) url += `&to_date=${toVal}`;
+  window.open(url, '_blank');
+}
+
+// ── Open history viewer ────────────────────────────────────────────────────────
+function openHistory() {
+  const stream = document.getElementById('stream-sel').value;
+  window.open(`/history?stream=${stream}`, `mova-history-${stream}`, 'width=1200,height=900,resizable=yes');
+}
+
+// ── IndexedDB site persistence ─────────────────────────────────────────────────
+const DB_NAME = 'mova-analysis', DB_VER = 1, STORE = 'sites';
+let db = null;
+
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(STORE, {keyPath:'name'});
+    req.onsuccess = e => { db = e.target.result; res(db); };
+    req.onerror   = () => rej(req.error);
+  });
+}
+
+async function saveSite() {
+  const name = document.getElementById('site-name').value.trim();
+  if (!name) { alert('Enter a site name'); return; }
+  if (!records.length) { alert('No data to save'); return; }
+  await openDB();
+  const tx = db.transaction(STORE, 'readwrite');
+  const store = tx.objectStore(STORE);
+
+  // Merge with existing if present
+  const existing = await new Promise(r => { const q = store.get(name); q.onsuccess = () => r(q.result); });
+  let merged = records;
+  if (existing) {
+    const seen = new Set(existing.records.map(r => JSON.stringify(r)));
+    const newOnes = records.filter(r => !seen.has(JSON.stringify(r)));
+    merged = [...existing.records, ...newOnes].sort((a,b)=>(a.ts||0)-(b.ts||0));
+  }
+
+  store.put({
+    name,
+    stream_id:    parseInt(document.getElementById('stream-sel').value, 10),
+    records:      merged,
+    dims,
+    detector_meta: detectorMeta,
+    updated:      Date.now(),
+  });
+  await new Promise(r => { tx.oncomplete = r; });
+  document.getElementById('site-info').textContent = `Saved "${name}" — ${merged.length.toLocaleString()} records`;
+  refreshSiteList();
+}
+
+async function loadSite() {
+  const sel  = document.getElementById('site-select');
+  const name = sel.value || document.getElementById('site-name').value.trim();
+  if (!name) { alert('Select or enter a site name'); return; }
+  await openDB();
+  const tx    = db.transaction(STORE, 'readonly');
+  const store = tx.objectStore(STORE);
+  const site  = await new Promise(r => { const q = store.get(name); q.onsuccess = () => r(q.result); });
+  if (!site) { alert(`Site "${name}" not found`); return; }
+
+  records  = site.records || [];
+  dims     = site.dims    || dims;
+  detectorMeta = site.detector_meta || [];
+  document.getElementById('stream-sel').value = site.stream_id ?? 0;
+  document.getElementById('site-name').value  = name;
+  rebuildIndexes();
+  updateStatus();
+  drawTimeline();
+  renderActiveTab();
+  document.getElementById('site-info').textContent =
+    `Loaded "${name}" — ${records.length.toLocaleString()} records · updated ${new Date(site.updated).toLocaleDateString()}`;
+}
+
+async function deleteSite() {
+  const name = document.getElementById('site-select').value;
+  if (!name) return;
+  if (!confirm(`Delete site "${name}"?`)) return;
+  await openDB();
+  const tx = db.transaction(STORE, 'readwrite');
+  tx.objectStore(STORE).delete(name);
+  await new Promise(r => { tx.oncomplete = r; });
+  refreshSiteList();
+}
+
+async function refreshSiteList() {
+  await openDB();
+  const tx    = db.transaction(STORE, 'readonly');
+  const store = tx.objectStore(STORE);
+  const keys  = await new Promise(r => { const q = store.getAllKeys(); q.onsuccess = () => r(q.result); });
+  const sel   = document.getElementById('site-select');
+  const prev  = sel.value;
+  sel.innerHTML = '<option value="">— saved sites —</option>' +
+    keys.map(k => `<option value="${h(k)}" ${k===prev?'selected':''}>${h(k)}</option>`).join('');
+}
+
+// ── Timeline ───────────────────────────────────────────────────────────────────
+function drawTimeline() {
+  const svg = document.getElementById('timeline-svg');
+  svgW = svg.clientWidth || 900;
+  if (!rangeMin || !rangeMax || rangeMin === rangeMax) { svg.innerHTML=''; return; }
+  const span = rangeMax - rangeMin;
+
+  const toX = ts => Math.round((ts - rangeMin) / span * svgW);
+  const cx  = toX(cursorTs);
+
+  // On-control track from hbRecs
+  let trackHtml = '';
+  for (let i = 0; i < hbRecs.length - 1; i++) {
+    const r = hbRecs[i];
+    const x1 = toX(r.ts), x2 = toX(hbRecs[i+1].ts);
+    const col = r.oc ? '#15803d' : '#e5e7eb';
+    trackHtml += `<rect x="${x1}" y="4" width="${Math.max(1,x2-x1)}" height="16" fill="${col}" opacity=".7"/>`;
+  }
+
+  // Event ticks
+  let ticks = '';
+  msgRecs.filter(m=>m.type===1&&m.sub===1).forEach(m => {
+    const x = toX(m.ts);
+    ticks += `<line x1="${x}" y1="24" x2="${x}" y2="36" stroke="#00d4ff" stroke-width="1.5" opacity=".7"/>`;
+  });
+  errRecs.forEach(e => {
+    const x = toX(e.ts);
+    ticks += `<polygon points="${x},44 ${x-4},52 ${x+4},52" fill="#b91c1c" opacity=".8"/>`;
+  });
+
+  // Time axis labels
+  const nLabels = Math.min(8, Math.floor(svgW / 80));
+  let labels = '';
+  for (let i = 0; i <= nLabels; i++) {
+    const ts = rangeMin + span * i / nLabels;
+    const x  = toX(ts);
+    const t  = new Date(ts * 1000).toTimeString().slice(0,8);
+    labels += `<text x="${x}" y="56" font-family="Courier New,monospace" font-size="9" fill="#9ca3af" text-anchor="${i===0?'start':i===nLabels?'end':'middle'}">${t}</text>`;
+  }
+
+  svg.innerHTML = `
+    <rect x="0" y="4" width="${svgW}" height="16" fill="#f3f4f6" rx="2"/>
+    ${trackHtml}
+    ${ticks}
+    ${labels}
+    <line x1="${cx}" y1="0" x2="${cx}" y2="56" stroke="#1a2744" stroke-width="1.5"/>
+    <circle cx="${cx}" cy="30" r="4" fill="#1a2744"/>`;
+
+  document.getElementById('cursor-time').textContent =
+    new Date(cursorTs*1000).toLocaleString();
+}
+
+function moveCursor(delta) {
+  cursorTs = Math.max(rangeMin, Math.min(rangeMax, cursorTs + delta));
+  drawTimeline(); renderActiveTab();
+}
+function setCursorEnd() { cursorTs = rangeMax; drawTimeline(); renderActiveTab(); }
+
+// Timeline drag
+const svg = document.getElementById('timeline-svg');
+svg.addEventListener('mousedown', e => { dragging=true; seekTimeline(e); });
+svg.addEventListener('mousemove', e => { if(dragging) seekTimeline(e); });
+svg.addEventListener('mouseup',   () => dragging=false);
+svg.addEventListener('mouseleave',() => dragging=false);
+svg.addEventListener('touchstart',e=>{dragging=true; seekTimeline(e.touches[0]);},{passive:true});
+svg.addEventListener('touchmove', e=>{if(dragging) seekTimeline(e.touches[0]);},{passive:true});
+svg.addEventListener('touchend',  ()=>dragging=false);
+
+function seekTimeline(e) {
+  if (!rangeMin || !rangeMax) return;
+  svgW = svg.clientWidth || 900;
+  const rect = svg.getBoundingClientRect();
+  const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  cursorTs   = rangeMin + frac * (rangeMax - rangeMin);
+  drawTimeline(); renderActiveTab();
+}
+
+// ── Render dispatch ────────────────────────────────────────────────────────────
+function renderActiveTab() {
+  switch (activeTab) {
+    case 'samview':   renderSAMView();   break;
+    case 'messages':  renderMessages();  break;
+    case 'tma':       renderTMA();       break;
+    case 'satflow':   renderSatFlow();   break;
+    case 'detcounts': renderDetCounts(); break;
+    case 'derived':   renderDerived();   break;
+    case 'errors':    renderErrors();    break;
+  }
+}
+
+// ── Messages tab ───────────────────────────────────────────────────────────────
+const MSG_LABELS = {
+  '1/1':'Stage Start','1/2':'Cycle Data','2/48':'Var Min',
+  '3/0':'Endsat','3/2':'EP Event','4':'Opt Snapshot',
+  '5/1':'Stage Chg','5/2':'Stage Chg','5/3':'OSAT+ES','5/4':'EM/PR',
+  '6/1':'Intergreen','6/2':'Intergreen'
+};
+const MSG_COLS = ['msg-b1','msg-b1','msg-b2','msg-b3','msg-b4','msg-b5','msg-b5','msg-b5','msg-b5','msg-b6','msg-b6'];
+
+function msgBadgeCls(type) {
+  if (type===1) return 'msg-b1';
+  if (type===2) return 'msg-b2';
+  if (type===3) return 'msg-b3';
+  if (type===4) return 'msg-b4';
+  if (type===5) return 'msg-b5';
+  return 'msg-b6';
+}
+
+function renderMessages() {
+  if (!activeFilters.has('msg')) { document.getElementById('tab-messages').innerHTML='<div class="empty">Messages filter is off.</div>'; return; }
+  const el   = document.getElementById('tab-messages');
+  const msgs = allUpTo(msgRecs, cursorTs).slice(-500).reverse();
+  if (!msgs.length) { el.innerHTML='<div class="empty">No messages up to cursor.</div>'; return; }
+  let html = `<div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:8px">Showing last ${msgs.length} messages up to ${fmtTs(cursorTs)}</div>`;
+  for (const m of msgs) {
+    const key   = `${m.type}/${m.sub}`;
+    const label = MSG_LABELS[key] || MSG_LABELS[String(m.type)] || `${m.type}/${m.sub}`;
+    const cls   = msgBadgeCls(m.type);
+    html += `<div class="msg-row">
+      <span class="msg-ts">${fmtTs(m.ts)}</span>
+      <span class="msg-badge ${cls}">${h(label)}</span>
+      <span class="msg-desc">${h(m.desc||'')}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+// ── TMA tab ────────────────────────────────────────────────────────────────────
+function renderTMA() {
+  if (!activeFilters.has('msg')) { document.getElementById('tab-tma').innerHTML='<div class="empty">Messages filter is off.</div>'; return; }
+  const el   = document.getElementById('tab-tma');
+  const t11  = allUpTo(msgRecs.filter(m=>m.type===1&&m.sub===1), cursorTs);
+  const t12  = allUpTo(msgRecs.filter(m=>m.type===1&&m.sub===2), cursorTs);
+  if (!t11.length) { el.innerHTML='<div class="empty">No stage-start messages up to cursor.</div>'; return; }
+
+  // Match each 1/1 with nearest 1/2 within 1s for cycle time
+  const cycleMap = {};
+  t12.forEach(m => { cycleMap[Math.round(m.ts)] = (m.raw||[])[2]; });
+
+  const nLanes = dims.no_lanes;
+  let html = `<div class="section-title">TMA Log — up to ${fmtTs(cursorTs)}</div>`;
+  html += `<table class="tma-table"><thead><tr>
+    <th>Time</th><th>Stage</th><th>Green(s)</th><th>Cycle(s)</th>
+    ${Array.from({length:nLanes},(_,i)=>`<th>L${i+1}</th>`).join('')}
+  </tr></thead><tbody>`;
+
+  const shown = t11.slice(-200).reverse();
+  shown.forEach((m, idx) => {
+    const raw   = m.raw||[];
+    const stage = raw[2]||'—';
+    const ts    = m.ts;
+    const prev  = shown[idx+1];
+    const green = prev ? Math.round(ts - prev.ts) : '—';
+    // Find cycle from nearest 1/2
+    let cyc = '—';
+    for (let delta = 0; delta <= 2; delta++) {
+      const v = cycleMap[Math.round(ts)+delta] || cycleMap[Math.round(ts)-delta];
+      if (v != null) { cyc = (v/10).toFixed(1); break; }
+    }
+    const flows = Array.from({length:nLanes},(_,i)=>raw[6+i]||0);
+    html += `<tr>
+      <td class="mono">${fmtTs(ts)}</td>
+      <td class="mono" style="text-align:center">${stage}</td>
+      <td class="mono" style="text-align:right">${green}</td>
+      <td class="mono" style="text-align:right">${cyc}</td>
+      ${flows.map(f=>`<td class="mono" style="text-align:right${f>800?';color:var(--amber);font-weight:700':''}">${f}</td>`).join('')}
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ── Sat Flow tab ───────────────────────────────────────────────────────────────
+function renderSatFlow() {
+  const el = document.getElementById('tab-satflow');
+  if (!activeFilters.has('msg') && !activeFilters.has('tma')) {
+    el.innerHTML='<div class="empty">Messages and Det/Flows filters are both off.</div>'; return;
+  }
+  const lastFlow = lastAtTs(msgRecs.filter(m=>m.type===1&&m.sub===1), cursorTs);
+  const lastOpt  = lastAtTs(msgRecs.filter(m=>m.type===4), cursorTs);
+  const lastCyc  = lastAtTs(msgRecs.filter(m=>m.type===1&&m.sub===2), cursorTs);
+  let html = '';
+
+  if (lastOpt && activeFilters.has('msg')) {
+    const r=lastOpt.raw||[],ben=r[4]||0,dis=r[5]||0,pr=r[6]||0;
+    const cyc=lastCyc?.raw?((lastCyc.raw[2]||0)/10):null;
+    html+=`<div class="sf-title">Optimiser @ ${fmtTs(lastOpt.ts)}</div>
+    <div class="opt-panel"><div class="opt-grid">
+      <div class="opt-item"><label>Benefit</label><span>${ben}</span></div>
+      <div class="opt-item"><label>Disbenefit</label><span>${dis}</span></div>
+      <div class="opt-item"><label>Pred. Red (s)</label><span>${pr}</span></div>
+      ${cyc!=null?`<div class="opt-item"><label>Cycle</label><span>${cyc.toFixed(1)}s</span></div>`:''}
+    </div></div>`;
+  }
+
+  if (lastFlow && activeFilters.has('msg')) {
+    const r=lastFlow.raw||[], lc=dims.no_lanes||r.length;
+    const flows=[]; for(let i=6;i<6+lc&&i<r.length;i++) flows.push(r[i]||0);
+    if (flows.length) {
+      const maxF=Math.max(...flows,1);
+      html+=`<div class="sf-title">Kernel Smoothed Flow @ ${fmtTs(lastFlow.ts)}</div>
+      <div class="lane-cards">`;
+      flows.forEach((f,i)=>{
+        const hi=f>800;
+        html+=`<div class="lane-card ${hi?'high':''}">
+          <div class="lane-num">Lane ${i+1}${hi?' HIGH':''}</div>
+          <div class="lane-flow">${f}</div><div class="lane-unit">veh/hr</div>
+          <div class="lane-bar"><div class="lane-bar-fill" style="width:${Math.round(f/maxF*100)}%"></div></div>
+        </div>`;
+      });
+      html+='</div>';
+    }
+  }
+
+  // Observed 1h from tma records
+  if (activeFilters.has('tma') && tmaRecs_all.length && detectorMeta.length) {
+    const HOUR=3600, winEnd=cursorTs, winStart=cursorTs-HOUR;
+    const win=tmaRecs_all.filter(r=>r.ts>=winStart&&r.ts<=winEnd);
+    if (win.length>=2) {
+      const deltas=computeDetDeltas(win), nD=deltas[0].delta.length;
+      const tots=new Array(nD).fill(0);
+      deltas.forEach(d=>{for(let i=0;i<nD;i++)tots[i]+=d.delta[i]||0;});
+      const actualS=win[win.length-1].ts-win[0].ts, scale=actualS>0?3600/actualS:1;
+      const detLookup={}; for(const m of detectorMeta) detLookup[m.id]=m;
+      const nL=dims.no_lanes||0, obs=new Array(nL).fill(0); let hasObs=false;
+      for(let id=1;id<=nD;id++){
+        const m=detLookup[id]; if(!m||!m.lane) continue;
+        if((m.type||'').toUpperCase().startsWith('X')){
+          const li=m.lane-1;
+          if(li>=0&&li<nL){obs[li]+=Math.round((tots[id-1]||0)*scale);hasObs=true;}
+        }
+      }
+      if(hasObs){
+        const wl=actualS>=3540?'1h':`${Math.round(actualS/60)}m`;
+        const maxO=Math.max(...obs,1);
+        html+=`<div class="sf-title">Observed Flow (${wl}) — ${win.length} samples</div>
+        <div class="lane-cards">`;
+        obs.forEach((f,i)=>{
+          const hi=f>800;
+          html+=`<div class="lane-card ${hi?'high':''}">
+            <div class="lane-num">Lane ${i+1}${hi?' HIGH':''}</div>
+            <div class="lane-flow">${f}</div><div class="lane-unit">veh/hr</div>
+            <div class="lane-bar"><div class="lane-bar-fill" style="width:${Math.round(f/maxO*100)}%"></div></div>
+          </div>`;
+        });
+        html+='</div>';
+      }
+    }
+  }
+
+  el.innerHTML = html || '<div class="empty">No flow data up to cursor.</div>';
+}
+
+// ── Det Counts helpers ─────────────────────────────────────────────────────────
+function computeDetDeltas(recs) {
+  const out=[];
+  for(let i=0;i<recs.length;i++){
+    const cur=recs[i],prev=i>0?recs[i-1]:null;
+    const n=(cur.dc||[]).length,delta=new Array(n).fill(0);
+    const same=prev&&prev.pstart===cur.pstart;
+    for(let d=0;d<n;d++){const cv=cur.dc[d]||0,pv=same?(prev.dc[d]||0):0; delta[d]=Math.max(0,cv-pv);}
+    out.push({ts:cur.ts,pstart:cur.pstart,delta});
+  }
+  return out;
+}
+
+// ── Det Counts tab ─────────────────────────────────────────────────────────────
+let allResetTs = 0;
+
+function renderDetCounts() {
+  if (!activeFilters.has('tma')) { document.getElementById('tab-detcounts').innerHTML='<div class="empty">Det/Flows filter is off.</div>'; return; }
+  const el     = document.getElementById('tab-detcounts');
+  const tmaAt  = allUpTo(tmaRecs_all, cursorTs);
+  if (!tmaAt.length) { el.innerHTML='<div class="empty">No detector count data up to cursor.</div>'; return; }
+
+  const deltas = computeDetDeltas(tmaAt);
+  const nDets  = deltas[0]?.delta.length || 0;
+  if (!nDets) { el.innerHTML='<div class="empty">No detector data.</div>'; return; }
+
+  const detLookup={};
+  for(const m of detectorMeta) detLookup[m.id]=m;
+
+  // Last minute
+  const LM_S=60, lmWin=tmaAt.filter(r=>r.ts>=cursorTs-LM_S);
+  const lmD=computeDetDeltas(lmWin),lmT=new Array(nDets).fill(0);
+  lmD.forEach(d=>{for(let i=0;i<nDets;i++)lmT[i]+=d.delta[i]||0;});
+
+  // Last hour
+  const LH_S=3600, lhWin=tmaAt.filter(r=>r.ts>=cursorTs-LH_S);
+  const lhD=computeDetDeltas(lhWin),lhT=new Array(nDets).fill(0);
+  lhD.forEach(d=>{for(let i=0;i<nDets;i++)lhT[i]+=d.delta[i]||0;});
+
+  // All (from reset)
+  const allRst = allResetTs || 0;
+  const allWin = allResetTs ? tmaAt.filter(r=>r.ts>=allRst) : tmaAt;
+  const allD=computeDetDeltas(allWin),allT=new Array(nDets).fill(0);
+  allD.forEach(d=>{for(let i=0;i<nDets;i++)allT[i]+=d.delta[i]||0;});
+  const ALL_MAX=999999;
+
+  let html=`<div class="section-title">Detector Counts @ ${fmtTs(cursorTs)}</div>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:11px">
+    <span style="color:var(--muted)">All window: ${allResetTs?fmtTs(allResetTs):'Session start'}</span>
+    <button class="tl-btn" onclick="allResetTs=cursorTs;renderDetCounts()">Reset All</button>
+  </div>
+  <table class="dc-table"><thead><tr>
+    <th style="text-align:left">Det</th><th style="text-align:left">Type</th>
+    <th style="text-align:left">Link</th><th style="text-align:left">Lane</th>
+    <th>Last Min</th><th>Last Hour</th><th>All</th>
+  </tr></thead><tbody>`;
+
+  for(let i=0;i<nDets;i++){
+    const meta=detLookup[i+1]||{};
+    const all=allT[i]||0, warn=all>=ALL_MAX;
+    html+=`<tr>
+      <td>${i+1}</td>
+      <td>${h(meta.type||'—')}</td>
+      <td>${meta.link||'—'}</td>
+      <td>${meta.lane||'—'}</td>
+      <td>${lmT[i]||0}</td>
+      <td>${lhT[i]||0}</td>
+      <td class="${warn?'dc-warn':''}">${all.toLocaleString()}${warn?' ⚠':''}</td>
+    </tr>`;
+  }
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+// ── Derived tab ────────────────────────────────────────────────────────────────
+function renderDerived() {
+  if (!activeFilters.has('msg')) { document.getElementById('tab-derived').innerHTML='<div class="empty">Messages filter is off.</div>'; return; }
+  const el   = document.getElementById('tab-derived');
+  const msgs = allUpTo(msgRecs, cursorTs);
+  if (!msgs.length) { el.innerHTML='<div class="empty">No messages up to cursor.</div>'; return; }
+
+  const nl=dims.no_links||0, nla=dims.no_lanes||0, ns=dims.no_stages||0, nd=dims.no_dets||0;
+  const st = initDerived(nl,nla,ns,nd);
+  for (const m of msgs) applyMsg(st, m);
+
+  const ind=(label,val,cls,tip)=>
+    `<div class="opt-item" title="${h(tip||'')}"><label>${h(label)}</label><span class="${cls||''}" style="${cls==='on'?'color:var(--green)':cls==='warn'?'color:var(--amber)':cls==='err'?'color:var(--red)':''}">${h(String(val))}</span></div>`;
+
+  let html=`<div class="opt-panel"><div class="opt-grid">
+    ${ind('HEALTHY',  st.healthy?'YES':'NO',  st.healthy?'on':'err')}
+    ${ind('ON CTRL',  st.io_on_ctrl?'YES':'NO', st.io_on_ctrl?'on':'')}
+    ${ind('OSAT',     st.oversaturated?'YES':'NO', st.oversaturated?'warn':'')}
+    ${ind('ENDSAT',   st.endsat_any?'YES':'NO',   st.endsat_any?'warn':'')}
+    ${ind('VDG',      st.vdg_active?'YES':'NO',   st.vdg_active?'warn':'')}
+    ${ind('EP HOLD',  st.ep_hold?'YES':'NO',       st.ep_hold?'warn':'')}
+    ${ind('EP EXT',   st.ep_ext?'YES':'NO',        st.ep_ext?'warn':'')}
+    ${ind('BENEFIT',  st.benefit,'',  'Optimiser benefit score')}
+    ${ind('DISBEN.',  st.disbenefit,'','Optimiser disbenefit score')}
+    ${ind('PRED RED', st.predicted_red,'','Predicted red time (s)')}
+    ${ind('CYCLE',    st.cycle_time?(st.cycle_time/10).toFixed(1)+'s':'—','')}
+    ${ind('JCN FLOW', st.junction_flow,'',  'Junction smoothed flow veh/hr')}
+  </div></div>`;
+
+  if (nl>0) {
+    html+=`<div class="section-title" style="margin-top:12px">Per-Link</div>
+    <table><thead><tr><th>Link</th><th>ENDSAT</th><th>NET BEN</th><th>BENEFIT</th><th>FREE RED%</th><th>XS GRN%</th><th>VDG MIN</th><th>BONUS</th></tr></thead><tbody>`;
+    for(let i=0;i<nl;i++){
+      html+=`<tr>
+        <td class="mono">${i+1}</td>
+        <td class="mono" style="${st.endsat_link[i]?'color:var(--amber)':''}">${st.endsat_link[i]?'YES':'—'}</td>
+        <td class="mono">${st.link_netben[i]||0}</td>
+        <td class="mono">${st.link_ben[i]||0}</td>
+        <td class="mono">${st.link_fred[i]||0}</td>
+        <td class="mono">${st.link_xg[i]||0}</td>
+        <td class="mono">${st.vdg_link_min[i]||0}</td>
+        <td class="mono">${st.link_bonus[i]||0}</td>
+      </tr>`;
+    }
+    html+='</tbody></table>';
+  }
+  el.innerHTML=html;
+}
+
+function initDerived(nl,nla,ns,nd){
+  return {
+    no_links:nl,no_lanes:nla,no_stages:ns,no_dets:nd,
+    endsat_link:new Array(nl).fill(0),endsat_any:0,
+    ep_hold:0,ep_ext:0,ep_timer:0,
+    vdg_active:0,vdg_stage_min:0,vdg_link_min:new Array(nl).fill(0),
+    benefit:0,disbenefit:0,predicted_red:0,oversaturated:0,
+    link_netben:new Array(nl).fill(0),link_ben:new Array(nl).fill(0),
+    link_fred:new Array(nl).fill(0),link_xg:new Array(nl).fill(0),
+    osat_es:new Array(nl).fill(0),
+    smoothed_flow:new Array(nla).fill(0),lane_sat:new Array(nla).fill(0),
+    junction_flow:0,lao_smx:0,lam:0,cut_max:0,high_flow:0,
+    cycle_time:0,drift_max:new Array(ns).fill(0),
+    stage_demand:new Array(ns).fill(0),link_bonus:new Array(nl).fill(0),
+    em_pr_truncation:0,em_stage:0,pr_stage:0,
+    healthy:0,plan_id:0,io_on_ctrl:0,
+    suspect_dets:new Array(nd).fill(0),suspect_any:0,suspect_count:0,
+  };
+}
+
+function applyMsg(st,m){
+  const r=m.raw||[],t=m.type,s=m.sub,nl=st.no_links,nla=st.no_lanes,ns=st.no_stages,nd=st.no_dets||0;
+  if(t===1&&s===1){
+    st.junction_flow=r[5]||0; st.lao_smx=r[6+nla]||0; st.lam=r[7+nla]||0;
+    st.cut_max=r[8+nla]||0;
+    for(let i=0;i<nla;i++)st.smoothed_flow[i]=r[6+i]||0;
+    st.high_flow=st.smoothed_flow.some(f=>f>800)?1:0;
+  } else if(t===1&&s===2){
+    st.cycle_time=r[2]||0;
+    for(let i=0;i<ns;i++)st.drift_max[i]=r[3+i]||0;
+    // suspect_status per detector follows immediately after drift_max values
+    for(let i=0;i<nd;i++)st.suspect_dets[i]=r[3+ns+i]||0;
+    st.suspect_any=st.suspect_dets.some(v=>v>0)?1:0;
+    st.suspect_count=st.suspect_dets.filter(v=>v>0).length;
+  } else if(t===2){
+    st.vdg_active=1;st.vdg_stage_min=r[3]||0;
+    for(let i=0;i<nl;i++)st.vdg_link_min[i]=r[4+i]||0;
+  } else if(t===3&&s===0){
+    for(let i=0;i<nl;i++)st.endsat_link[i]=r[4+i]||0;
+    st.endsat_any=st.endsat_link.some(v=>v>0)?1:0;
+  } else if(t===3&&s===2){
+    st.ep_hold=r[4]||0;st.ep_ext=r[5]||0;st.ep_timer=r[2]||0;
+  } else if(t===4){
+    st.benefit=r[4]||0;st.disbenefit=r[5]||0;st.predicted_red=r[6]||0;
+    st.oversaturated=(st.disbenefit>st.benefit&&st.benefit>0)?1:0;
+    let li=7;
+    for(let i=0;i<nl&&li+4<r.length;i++){
+      st.link_netben[i]=r[li+1]||0;st.link_ben[i]=r[li+2]||0;
+      st.link_fred[i]=r[li+3]||0;st.link_xg[i]=r[li+4]||0;li+=5;
+    }
+  } else if(t===5&&s===3){
+    for(let i=0;i<nl;i++)st.osat_es[i]=r[7+i]||0;
+  } else if(t===5&&s===4){
+    st.em_pr_truncation=1;st.em_stage=r[7]||0;st.pr_stage=r[8]||0;
+  } else if(t===6&&s===1){
+    for(let i=0;i<ns;i++)st.stage_demand[i]=r[3+i]||0;
+    for(let i=0;i<nl;i++)st.link_bonus[i]=r[3+ns+i]||0;
+  }
+}
+
+// ── Errors tab ─────────────────────────────────────────────────────────────────
+function renderErrors() {
+  if (!activeFilters.has('err')) { document.getElementById('tab-errors').innerHTML='<div class="empty">Errors filter is off.</div>'; return; }
+  const el   = document.getElementById('tab-errors');
+  const errs = allUpTo(errRecs, cursorTs).slice().reverse();
+  if (!errs.length) { el.innerHTML='<div class="empty">No errors up to cursor.</div>'; return; }
+  let html=`<div class="section-title">Fault History — up to ${fmtTs(cursorTs)}</div>
+  <table><thead><tr><th>Time</th><th>Type</th><th>ID</th><th>Description</th><th>Data</th></tr></thead><tbody>`;
+  for(const e of errs){
+    const cls=e.badge==='IDS'?'err-ids':e.badge==='INFO'?'err-info':'err-status';
+    html+=`<tr>
+      <td class="mono">${fmtTs(e.ts)}</td>
+      <td><span class="err-badge ${cls}">${h(e.badge||'?')}</span></td>
+      <td class="mono">${e.error_id||'—'}</td>
+      <td>${h(e.label||e.desc||'')}</td>
+      <td class="mono">${e.data!=null?e.data:''}</td>
+    </tr>`;
+  }
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+// ── Play engine ───────────────────────────────────────────────────────────────
+let playing   = false;
+let playTimer = null;
+
+function togglePlay() {
+  playing = !playing;
+  const btn = document.getElementById('play-btn');
+  if (playing) {
+    btn.textContent = '⏸ Pause';
+    btn.style.background = 'var(--amber)';
+    btn.style.color = '#000';
+    schedulePlayTick();
+  } else {
+    btn.textContent = '▶ Play';
+    btn.style.background = '';
+    btn.style.color = '';
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+  }
+}
+
+function schedulePlayTick() {
+  if (!playing) return;
+  const speed  = parseFloat(document.getElementById('play-speed').value) || 10;
+  const stepS  = speed * 0.1;          // advance this many data-seconds per tick
+  const tickMs = 100;                   // tick every 100ms real-time = smooth at all speeds
+  playTimer = setTimeout(() => {
+    if (!playing) return;
+    cursorTs = Math.min(rangeMax, cursorTs + stepS);
+    drawTimeline();
+    renderActiveTab();
+    if (cursorTs >= rangeMax) { togglePlay(); return; }
+    schedulePlayTick();
+  }, tickMs);
+}
+
+// ── SAM View ──────────────────────────────────────────────────────────────────
+function renderSAMView() {
+  const el = document.getElementById('tab-samview');
+  if (!records.length) { el.innerHTML = '<div class="empty">Load data to begin.</div>'; return; }
+
+  // ── Derive state at cursor ────────────────────────────────────────────────
+  const msgs    = allUpTo(msgRecs, cursorTs);
+  const lastHB  = lastAtTs(hbRecs, cursorTs);
+  const nl = dims.no_links||0, nla = dims.no_lanes||0, ns = dims.no_stages||0, nd = dims.no_dets||0;
+  const st = initDerived(nl, nla, ns, nd);
+  for (const m of msgs) applyMsg(st, m);
+
+  // IO state from last heartbeat
+  const cs       = lastHB?.cs ?? 0;
+  const ds       = lastHB?.ds ?? 0;
+  const ns_val   = lastHB?.ns ?? 0;
+  const ec       = lastHB?.ec ?? 0;
+  const wc       = lastHB?.wc ?? -1;
+  const on_ctrl  = lastHB?.on_ctrl ?? 0;
+  const mova_on  = lastHB?.mova_on ?? 0;
+  const inWarmup = wc >= 0 && wc <= (ns || 4);
+
+  // Infer current process from recent message types
+  const RECENT_S = 5;
+  const recent = msgs.filter(m => m.ts >= cursorTs - RECENT_S);
+  let process = 'CONT IG';
+  if (recent.some(m => m.type === 2))             process = 'VAR MIN';
+  else if (recent.some(m => m.type === 3 && m.sub === 0)) process = 'ENDSAT';
+  else if (recent.some(m => m.type === 3 && m.sub === 2)) process = 'EP EVENT';
+  else if (recent.some(m => m.type === 4))        process = 'DELAY+STOPS';
+  else if (recent.some(m => m.type === 1 && m.sub === 1)) process = 'START IG';
+  else if (recent.some(m => m.type === 6))        process = 'INTERGREEN';
+
+  // TiG and SMIN from most recent type 4 or 5
+  const lastOpt = lastAtTs(msgRecs.filter(m => m.type === 4 || (m.type === 5)), cursorTs);
+  const tig  = lastOpt ? Math.round((lastOpt.raw[2]||0) / 10) : 0;
+  const smin = st.vdg_stage_min ? Math.round(st.vdg_stage_min / 10) : 0;
+  const dmx  = st.cycle_time ? Math.round(st.cycle_time / 10) : 0;
+  const tigPct  = dmx > 0 ? Math.min(100, Math.round(tig  / dmx * 100)) : 0;
+  const sminPct = dmx > 0 ? Math.min(100, Math.round(smin / dmx * 100)) : 0;
+  const dmxPct  = 100;
+
+  // Lambda
+  const jflow  = st.junction_flow || 0;
+  const laosmx = st.lao_smx       || 0;
+  const lam    = st.lam           || 0;
+
+  // Oversat link count
+  const osatCount = st.link_netben.filter(v => v < 0).length;
+
+  // Optimiser lean
+  const ben = st.benefit, dis = st.disbenefit;
+  let leanCls = 'sam-lean-neu', leanTxt = 'NEUTRAL';
+  if (ben > 0 || dis > 0) {
+    if (ben > dis) { leanCls = 'sam-lean-ext'; leanTxt = 'EXTEND ▶'; }
+    else if (dis > ben) { leanCls = 'sam-lean-chg'; leanTxt = 'CHANGE ▶▶'; }
+  }
+
+  // ── Panel 1: System Health ────────────────────────────────────────────────
+  const bOC  = `<span class="sam-badge ${on_ctrl?'sam-ok':'sam-off'}">ON-CTRL: ${on_ctrl?'YES':'NO'}</span>`;
+  const bEN  = `<span class="sam-badge ${mova_on?'sam-ok':'sam-off'}">ENABLED: ${mova_on?'YES':'NO'}</span>`;
+  const bEC  = `<span class="sam-badge ${ec>=20?'sam-err':ec>0?'sam-warn':'sam-ok'}">EC: ${ec}</span>`;
+  const bWC  = `<span class="sam-badge ${inWarmup?'sam-warn':'sam-ok'}">${inWarmup?`WARMUP WC:${wc}`:'POST-WARMUP'}</span>`;
+  const bOS  = `<span class="sam-badge ${osatCount>0?'sam-warn':'sam-ok'}">OSAT: ${osatCount} LINK${osatCount!==1?'S':''}</span>`;
+  const bSUS = `<span class="sam-badge ${st.suspect_any?'sam-warn':'sam-off'}">SUS DETS: ${st.suspect_count||0}</span>`;
+  const bES  = `<span class="sam-badge ${st.endsat_any?'sam-warn':'sam-off'}">ENDSAT: ${st.endsat_any?'YES':'—'}</span>`;
+  const bEP  = `<span class="sam-badge ${st.ep_hold||st.ep_ext?'sam-info':'sam-off'}">${st.ep_hold?'EP HOLD':st.ep_ext?'EP EXT':'EP: —'}</span>`;
+  const bCUT = `<span class="sam-badge ${st.cut_max?'sam-warn':'sam-off'}">${st.cut_max?'CUT-MAX':'CUT: —'}</span>`;
+  const bEM  = `<span class="sam-badge ${st.em_pr_truncation?'sam-err':'sam-off'}">${st.em_pr_truncation?`EM/PR STG${st.em_stage}`:'EM/PR: —'}</span>`;
+
+  // ── Panel 2: Stage & Process ──────────────────────────────────────────────
+  const stageRow = `
+    <div class="sam-fields">
+      <div class="sam-field"><label>Stage</label><span>${cs||'—'}</span></div>
+      <div class="sam-field"><label>Next</label><span>${ns_val||'—'}</span></div>
+      <div class="sam-field"><label>Demanded</label><span>${ds||'—'}</span></div>
+      <div class="sam-field"><label>Process</label><span style="font-size:11px">${process}</span></div>
+      <div class="sam-field"><label>TiG (s)</label><span>${tig}</span></div>
+      <div class="sam-field"><label>SMIN (s)</label><span>${smin||'—'}</span></div>
+      <div class="sam-field"><label>Cycle (s)</label><span>${dmx||'—'}</span></div>
+      <div class="sam-field"><label>Jcn Flow</label><span>${jflow}</span></div>
+      <div class="sam-field"><label>λ Stage%</label><span>${laosmx||'—'}</span></div>
+      <div class="sam-field"><label>λ Jcn%</label><span>${lam||'—'}</span></div>
+    </div>
+    ${ns>0&&st.drift_max.some(v=>v>0)?`<div style="margin-top:8px">
+      <div style="font-size:9px;color:var(--muted);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Drift Max per Stage</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${Array.from({length:ns},(_,i)=>`<div style="text-align:center;min-width:32px">
+          <div style="font-size:9px;color:var(--muted)">S${i+1}</div>
+          <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:${st.drift_max[i]>0?'var(--amber)':'var(--topbar)'}">${st.drift_max[i]||0}</div>
+        </div>`).join('')}
+      </div>
+    </div>`:''}
+    ${ns>0&&st.suspect_any?`<div style="margin-top:8px">
+      <div style="font-size:9px;color:var(--muted);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px">Suspect Detectors</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        ${st.suspect_dets.map((v,i)=>v>0?`<span style="background:#fef3c7;color:#92400e;font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px">D${i+1}:${v}</span>`:'').filter(Boolean).join('')}
+      </div>
+    </div>`:''}
+    ${dmx>0?`<div class="sam-bar-wrap">
+      <div class="sam-bar-lbl">Time in Green vs cycle bounds</div>
+      <div class="sam-bar-track">
+        <div class="sam-bar-tig" style="width:${tigPct}%"></div>
+        ${smin>0?`<div class="sam-bar-smin" style="left:${sminPct}%" title="SMIN"></div>`:''}
+        <div class="sam-bar-dmx" style="left:${dmxPct-1}%" title="Cycle end"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:2px">
+        <span>0</span>${smin?`<span style="color:var(--amber)">SMIN ${smin}s</span>`:''}
+        <span>${dmx}s</span>
+      </div>
+    </div>`:''}`;
+
+  // ── Panel 3: Optimiser ────────────────────────────────────────────────────
+  const optRow = `
+    <div class="sam-fields" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="sam-field"><label>Benefit</label><span>${ben}</span></div>
+      <div class="sam-field"><label>Disbenefit</label><span>${dis}</span></div>
+      <div class="sam-field"><label>Pred Red (s)</label><span>${st.predicted_red||0}</span></div>
+    </div>
+    <div class="sam-lean ${leanCls}">${leanTxt}</div>`;
+
+  // ── Panel 4: Links & Detectors ────────────────────────────────────────────
+  let linkRows = '';
+  for (let i = 0; i < nl; i++) {
+    const nb  = st.link_netben[i]||0;
+    const es  = st.endsat_link[i];
+    const os  = st.osat_es[i];
+    const bon = st.link_bonus[i]||0;
+    const dem = (st.stage_demand||[]).some((v,si) => v && (st.link_bonus[i]>0||i<nl));
+    linkRows += `<tr>
+      <td>${i+1}</td>
+      <td>${es?'<span class="sam-sus">ES</span>':'—'}</td>
+      <td>${os?'<span class="sam-sus">OS</span>':'—'}</td>
+      <td style="color:${nb<0?'var(--red)':nb>0?'var(--green)':'inherit'}">${nb}</td>
+      <td>${bon>0?bon:'—'}</td>
+    </tr>`;
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  el.innerHTML = `
+    <div class="sam-cursor-bar">
+      ▶ ${new Date(cursorTs*1000).toLocaleString()}
+      &nbsp;·&nbsp; ${msgs.length.toLocaleString()} msgs processed
+      &nbsp;·&nbsp; HB: ${lastHB ? fmtTs(lastHB.ts) : '—'}
+    </div>
+    <div class="sam-wrap" style="margin-top:10px">
+
+      <div class="sam-panel">
+        <div class="sam-panel-hdr">System Health</div>
+        <div class="sam-panel-body">
+          <div class="sam-badges">${bOC}${bEN}${bEC}${bWC}${bOS}${bSUS}${bES}${bEP}${bCUT}${bEM}</div>
+        </div>
+      </div>
+
+      <div class="sam-panel">
+        <div class="sam-panel-hdr">Stage &amp; Process</div>
+        <div class="sam-panel-body">${stageRow}</div>
+      </div>
+
+      <div class="sam-panel">
+        <div class="sam-panel-hdr">Optimiser</div>
+        <div class="sam-panel-body">${optRow}</div>
+      </div>
+
+      <div class="sam-panel">
+        <div class="sam-panel-hdr">Links (${nl})</div>
+        <div class="sam-panel-body">
+          ${nl>0?`<table class="sam-link-table">
+            <thead><tr><th>Lnk</th><th>EndSat</th><th>OSat</th><th>Net Ben</th><th>Bonus</th></tr></thead>
+            <tbody>${linkRows}</tbody>
+          </table>`:'<span style="color:var(--muted);font-size:11px">No link data</span>'}
+        </div>
+      </div>
+
+    </div>`;
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+(async()=>{
+  // Pre-fill dates to today
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('api-from').value = today;
+  document.getElementById('api-to').value   = today;
+  // Stream from URL param
+  const p = new URLSearchParams(location.search);
+  if (p.get('stream')) document.getElementById('stream-sel').value = p.get('stream');
+  // Load saved sites
+  try { await refreshSiteList(); } catch(_) {}
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOVA History</title>
+  <link rel="stylesheet" href="css/pci.css">
+  <style>
+    /* height:100vh required — flex scroll layout
+       breaks with pci.css min-height:100vh */
+    body { height: 100vh; overflow: hidden; }
+
+    /* popup header overrides — history uses 20px logo */
+    .logo-mark { width: 20px; height: 20px; }
+    .logo-text { font-size: 14px; letter-spacing: 0; }
+
+    /* ── Header ─────────────────────────────────────────────────────────────── */
+    header{gap:12px;padding:0 16px;flex-wrap:wrap}
+    .hdr-sep{width:1px;height:20px;background:rgba(255,255,255,.2);flex-shrink:0}
+    .stream-badge{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:600;flex-shrink:0}
+    .hdr-controls{display:flex;align-items:center;gap:6px;flex:1;flex-wrap:wrap}
+    .hdr-label{font-size:10px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.05em}
+    input[type=date],input[type=time]{background:#253a5e;border:1px solid rgba(255,255,255,.2);color:#fff;font-family:var(--mono);font-size:11px;padding:3px 6px;border-radius:3px;height:26px}
+    input[type=date]:focus,input[type=time]:focus{outline:none;border-color:var(--accent)}
+    .btn-load{background:var(--accent2);color:#fff;border:none;border-radius:3px;padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer;height:26px}
+    .btn-load:hover{background:#1d4ed8}
+    .btn-now{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:3px;padding:4px 10px;font-size:11px;cursor:pointer;height:26px}
+    .btn-now:hover{background:rgba(255,255,255,.2)}
+    #load-status{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.5)}
+
+    /* ── Timeline strip ─────────────────────────────────────────────────────── */
+    .timeline-wrap{background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;padding:8px 12px 0;user-select:none}
+    #timeline{width:100%;display:block;cursor:crosshair}
+    .timeline-bar{display:flex;align-items:center;gap:8px;padding:4px 0 6px}
+    .cursor-ts{font-family:var(--mono);font-size:11px;color:var(--text);min-width:70px}
+    .btn-step{background:var(--bg3);border:1px solid var(--border);border-radius:3px;padding:2px 7px;font-size:11px;cursor:pointer;font-family:var(--mono)}
+    .btn-step:hover{background:var(--border)}
+    .tl-stat{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:auto}
+
+    /* ── Tab bar ─────────────────────────────────────────────────────────────── */
+    .tab-bar{display:flex;gap:0;border-bottom:2px solid var(--border);flex-shrink:0;background:var(--bg2)}
+    .tab-btn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:8px 16px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;letter-spacing:.03em}
+    .tab-btn:hover{color:var(--text)}
+    .tab-btn.active{color:var(--accent2);border-bottom-color:var(--accent2)}
+
+    /* ── Content area ────────────────────────────────────────────────────────── */
+    .tab-pane{display:none;flex:1;overflow-y:auto;padding:12px 16px}
+    .tab-pane.active{display:block}
+    #content-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+    /* ── TMA table ───────────────────────────────────────────────────────────── */
+    .tma-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+    .tma-table thead th{text-align:left;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:5px 8px;border-bottom:1px solid var(--border);background:var(--bg3);position:sticky;top:0}
+    .tma-table tbody tr{border-bottom:1px solid var(--border)}
+    .tma-table tbody tr:hover{background:var(--bg3)}
+    .tma-table tbody td{padding:5px 8px;vertical-align:top}
+    .stage-badge{display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:#dbeafe;color:#1e40af}
+    .flow-val{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap}
+
+    /* ── Satflow cards ───────────────────────────────────────────────────────── */
+    .sf-section{margin-bottom:20px}
+    .sf-title{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+    .lane-cards{display:flex;flex-wrap:wrap;gap:10px}
+    .lane-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:12px 16px;min-width:110px}
+    .lane-card.sat{border-color:#fcd34d;background:#fef3c7}
+    .lane-card.high{border-color:#fca5a5;background:#fee2e2}
+    .lane-num{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+    .lane-card.sat .lane-num,.lane-card.high .lane-num{color:#92400e}
+    .lane-flow{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text)}
+    .lane-card.sat .lane-flow{color:#92400e}
+    .lane-card.high .lane-flow{color:#991b1b}
+    .lane-unit{font-family:var(--mono);font-size:9px;color:var(--muted)}
+    .lane-bar{height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden}
+    .lane-bar-fill{height:100%;border-radius:2px;background:var(--accent)}
+    .lane-card.sat .lane-bar-fill{background:#f59e0b}
+    .lane-card.high .lane-bar-fill{background:#ef4444}
+    .opt-panel{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:12px 16px;margin-bottom:20px}
+    .opt-grid{display:flex;gap:24px;flex-wrap:wrap}
+    .opt-item label{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:2px}
+    .opt-item span{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--text)}
+
+    /* ── Derived (shared with derived.html) ──────────────────────────────────── */
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:10px}
+    .card-hdr{background:var(--bg3);border-bottom:1px solid var(--border);padding:6px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:flex;align-items:center;gap:8px}
+    .hdr-badge{font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:3px;background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+    .hdr-badge.active{background:#d1fae5;border-color:#6ee7b7;color:#065f46}
+    .hdr-badge.warn{background:#fef3c7;border-color:#fcd34d;color:#92400e}
+    .hdr-badge.alert{background:#fee2e2;border-color:#fca5a5;color:#991b1b}
+    .card-body{padding:10px 12px}
+    .indicator-row{display:flex;flex-wrap:wrap;gap:8px}
+    .indicator{display:flex;flex-direction:column;align-items:center;min-width:68px;padding:8px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);cursor:default;transition:all .2s}
+    .indicator.on{background:#d1fae5;border-color:#6ee7b7}
+    .indicator.warn{background:#fef3c7;border-color:#fcd34d}
+    .indicator.alert{background:#fee2e2;border-color:#fca5a5}
+    .indicator.blue{background:#dbeafe;border-color:#93c5fd}
+    .indicator-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px}
+    .indicator.on .indicator-label{color:#065f46}
+    .indicator.warn .indicator-label{color:#92400e}
+    .indicator.alert .indicator-label{color:#991b1b}
+    .indicator.blue .indicator-label{color:#1e40af}
+    .indicator-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text)}
+    .indicator.on .indicator-val{color:#065f46}
+    .indicator.warn .indicator-val{color:#92400e}
+    .indicator.alert .indicator-val{color:#991b1b}
+    .indicator.blue .indicator-val{color:#1e40af}
+    .num-row{display:flex;flex-wrap:wrap;gap:8px}
+    .num-cell{display:flex;flex-direction:column;min-width:90px;padding:7px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg3)}
+    .num-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px}
+    .num-val{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text)}
+    .num-val.pos{color:#065f46} .num-val.neg{color:#991b1b} .num-val.neu{color:var(--muted)}
+    .num-bar{height:4px;border-radius:2px;background:var(--border);margin-top:5px;overflow:hidden}
+    .num-bar-fill{height:100%;border-radius:2px;transition:width .4s;background:var(--accent2)}
+    .num-bar-fill.green{background:#22c55e} .num-bar-fill.amber{background:#f59e0b} .num-bar-fill.red{background:#ef4444}
+    .grid-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+    .grid-table th{background:var(--bg3);border:1px solid var(--border);padding:4px 8px;text-align:center;font-weight:700;color:var(--muted);font-size:10px;text-transform:uppercase;white-space:nowrap}
+    .grid-table td{border:1px solid var(--border);padding:4px 8px;text-align:center;color:var(--text);background:var(--bg2);transition:background .2s,color .2s}
+    .grid-table td.on{background:#d1fae5;color:#065f46;font-weight:700}
+    .grid-table td.warn{background:#fef3c7;color:#92400e;font-weight:700}
+    .grid-table td.alert{background:#fee2e2;color:#991b1b;font-weight:700}
+    .grid-table td.blue{background:#dbeafe;color:#1e40af;font-weight:700}
+    .bit-row{display:flex;flex-wrap:wrap;gap:4px}
+    .bit-cell{display:flex;flex-direction:column;align-items:center;min-width:36px;padding:4px 5px;border-radius:3px;border:1px solid var(--border);background:var(--bg3);cursor:default}
+    .bit-cell.on{background:#d1fae5;border-color:#6ee7b7}
+    .bit-cell.alert{background:#fee2e2;border-color:#fca5a5}
+    .bit-cell.blue{background:#dbeafe;border-color:#93c5fd}
+    .bit-num{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--muted)}
+    .bit-cell.on .bit-num{color:#065f46}
+    .bit-cell.alert .bit-num{color:#991b1b}
+    .bit-cell.blue .bit-num{color:#1e40af}
+    .flow-grid{display:flex;flex-wrap:wrap;gap:6px}
+    .flow-cell{display:flex;flex-direction:column;width:72px;padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg3)}
+    .flow-cell.sat{background:#fef3c7;border-color:#fcd34d}
+    .flow-cell.high{background:#fee2e2;border-color:#fca5a5}
+    .flow-lane{font-family:var(--mono);font-size:9px;color:var(--muted)}
+    .flow-val2{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text)}
+    .flow-cell.sat .flow-val2{color:#92400e} .flow-cell.high .flow-val2{color:#991b1b}
+    .flow-bar2{height:3px;border-radius:2px;background:var(--border);margin-top:4px;overflow:hidden}
+    .flow-bar-fill2{height:100%;border-radius:2px;background:var(--accent2);transition:width .4s}
+    .flow-cell.sat .flow-bar-fill2{background:#f59e0b} .flow-cell.high .flow-bar-fill2{background:#ef4444}
+    .age{font-size:10px;color:var(--muted);margin-left:auto;font-family:var(--mono)}
+
+    /* ── Messages table ──────────────────────────────────────────────────────── */
+    .msg-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+    .msg-table th{text-align:left;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:5px 8px;border-bottom:1px solid var(--border);background:var(--bg3);position:sticky;top:0}
+    .msg-table td{padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+    .msg-table tr:hover td{background:var(--bg3)}
+    .msg-type{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:#dbeafe;color:#1e40af}
+    .msg-desc{color:var(--muted);font-size:10px}
+
+    /* ── Errors table ────────────────────────────────────────────────────────── */
+    .err-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+    .err-table th{text-align:left;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:5px 8px;border-bottom:1px solid var(--border);background:var(--bg3);position:sticky;top:0}
+    .err-table td{padding:5px 8px;border-bottom:1px solid var(--border)}
+    .err-table tr:hover td{background:var(--bg3)}
+    .err-badge{display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px}
+    .err-badge.ids{background:#fef3c7;color:#92400e}
+    .err-badge.info{background:var(--bg3);color:var(--muted)}
+
+    /* ── Shared empty / loading states ───────────────────────────────────────── */
+    .empty{color:var(--muted);font-style:italic;font-size:12px;padding:16px 0;text-align:center}
+    [title]{cursor:help}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <span class="logo-text">MOVA History</span>
+  </div>
+  <div class="hdr-sep"></div>
+  <span class="stream-badge" id="stream-badge">Stream —</span>
+  <div class="hdr-sep"></div>
+  <div class="hdr-controls">
+    <span class="hdr-label">Date</span>
+    <input type="date" id="date-input">
+    <span class="hdr-label">From</span>
+    <input type="time" id="from-input" step="1" placeholder="HH:MM:SS">
+    <span class="hdr-label">To</span>
+    <input type="time" id="to-input" step="1" placeholder="HH:MM:SS">
+    <button class="btn-load" id="load-btn">Load</button>
+    <button class="btn-now"  id="now-btn">Today / Now</button>
+    <span id="load-status"></span>
+  </div>
+</header>
+
+<div class="timeline-wrap" id="timeline-wrap">
+  <svg id="timeline" height="44"></svg>
+  <div class="timeline-bar">
+    <span class="cursor-ts" id="cursor-ts">—</span>
+    <button class="btn-step" id="btn-back">−1 min</button>
+    <button class="btn-step" id="btn-fwd">+1 min</button>
+    <button class="btn-step" id="btn-start">◀◀ Start</button>
+    <button class="btn-step" id="btn-end">End ▶▶</button>
+    <span class="tl-stat" id="tl-stat"></span>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" data-tab="tma">TMA Logs</button>
+  <button class="tab-btn" data-tab="detcounts">Det Counts</button>
+  <button class="tab-btn" data-tab="satflow">Sat Flow</button>
+  <button class="tab-btn" data-tab="derived">Derived</button>
+  <button class="tab-btn" data-tab="messages">Messages</button>
+  <button class="tab-btn" data-tab="errors">Errors</button>
+</div>
+
+<div id="content-area">
+  <div id="tab-tma"       class="tab-pane active"><div class="empty">Load a date to view historical data.</div></div>
+  <div id="tab-detcounts" class="tab-pane"><div class="empty">Load a date to view historical data.</div></div>
+  <div id="tab-satflow"   class="tab-pane"><div class="empty">Load a date to view historical data.</div></div>
+  <div id="tab-derived"  class="tab-pane"><div class="empty">Load a date to view historical data.</div></div>
+  <div id="tab-messages" class="tab-pane"><div class="empty">Load a date to view historical data.</div></div>
+  <div id="tab-errors"   class="tab-pane"><div class="empty">Load a date to view historical data.</div></div>
+</div>
+
+<script>
+'use strict';
+
+// ─── Bootstrap ────────────────────────────────────────────────────────────────
+const params   = new URLSearchParams(location.search);
+const streamId = parseInt(params.get('stream') || '0', 10);
+document.getElementById('stream-badge').textContent = `Stream ${streamId + 1}`;
+document.title = `MOVA History — Stream ${streamId + 1}`;
+
+// default date input to today
+const todayStr = new Date().toISOString().slice(0, 10);
+document.getElementById('date-input').value = todayStr;
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let records      = [];
+let dims         = {no_links:0, no_lanes:0, no_stages:0, no_dets:0};
+let detectorMeta = [];   // [{id,type,link,lane,dist}] from slice response
+let hbRecs       = [];
+let msgRecs      = [];
+let errRecs      = [];
+let tmaRecs_all  = [];   // all tma records sorted asc — for rolling 1h observed flow
+let rangeMin     = 0;
+let rangeMax     = 0;
+let cursorTs     = 0;
+let svgW         = 0;
+let dragging     = false;
+let activeTab    = 'tma';
+let rafPending   = false;
+let autoReloadTimer = null;
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    activeTab = btn.dataset.tab;
+    document.getElementById(`tab-${activeTab}`).classList.add('active');
+    renderActiveTab();
+  });
+});
+
+// ─── Load data ────────────────────────────────────────────────────────────────
+async function loadData() {
+  const date     = document.getElementById('date-input').value;
+  const fromTime = document.getElementById('from-input').value;
+  const toTime   = document.getElementById('to-input').value;
+  if (!date) return;
+
+  const statusEl = document.getElementById('load-status');
+  statusEl.textContent = 'Loading…';
+
+  let url = `/api/streams/${streamId}/log/slice?date=${date}`;
+  if (fromTime) url += `&from_time=${encodeURIComponent(fromTime)}`;
+  if (toTime)   url += `&to_time=${encodeURIComponent(toTime)}`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      statusEl.textContent = `Error: ${err.detail || resp.status}`;
+      return;
+    }
+    const data = await resp.json();
+    records      = data.records || [];
+    dims         = data.dimensions || {no_links:0, no_lanes:0, no_stages:0, no_dets:0};
+    detectorMeta = data.detector_meta || [];
+
+    hbRecs      = records.filter(r => r.t === 'hb' ).sort((a,b) => a.ts - b.ts);
+    msgRecs     = records.filter(r => r.t === 'msg').sort((a,b) => a.ts - b.ts);
+    errRecs     = records.filter(r => r.t === 'err').sort((a,b) => a.ts - b.ts);
+    tmaRecs_all = records.filter(r => r.t === 'tma').sort((a,b) => a.ts - b.ts);
+
+    const allTs = records.map(r => r.ts).filter(Boolean);
+    rangeMin = allTs.length ? Math.min(...allTs) : 0;
+    rangeMax = allTs.length ? Math.max(...allTs) : 0;
+
+    const updStr = new Date().toTimeString().slice(0,8);
+    statusEl.textContent = `${records.length} records  ·  ${hbRecs.length} hb  ·  ${msgRecs.length} msgs  ·  ${errRecs.length} errors  ·  updated ${updStr}`;
+
+    // Auto-reload when viewing today with no end time
+    const isLive = (date === new Date().toISOString().slice(0,10)) && !toTime;
+    if (autoReloadTimer) clearInterval(autoReloadTimer);
+    if (isLive) {
+      autoReloadTimer = setInterval(async () => {
+        const wasAtEnd = rangeMax > 0 && Math.abs(cursorTs - rangeMax) < 90;
+        await loadData();   // reloads same date/time range
+        if (wasAtEnd) setCursor(rangeMax);  // advance cursor if it was at end
+      }, 30000);
+    }
+
+    buildTimeline();
+
+    // Cursor: end of range by default (show "latest" state)
+    setCursor(rangeMax || rangeMin);
+
+  } catch(e) {
+    statusEl.textContent = `Fetch error: ${e.message}`;
+  }
+}
+
+document.getElementById('load-btn').addEventListener('click', loadData);
+document.getElementById('now-btn').addEventListener('click', () => {
+  document.getElementById('date-input').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('from-input').value = '';
+  document.getElementById('to-input').value   = '';
+  if (autoReloadTimer) clearInterval(autoReloadTimer);
+  autoReloadTimer = null;
+  loadData();
+});
+
+// Load on Enter in any header input
+document.querySelectorAll('input[type=date],input[type=time]').forEach(el => {
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') loadData(); });
+});
+
+// Populate available dates datalist
+(async () => {
+  try {
+    const resp = await fetch(`/api/streams/${streamId}/logs`);
+    if (!resp.ok) return;
+    const list = await resp.json();
+    const dl = document.createElement('datalist');
+    dl.id = 'avail-dates';
+    list.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.date;
+      dl.appendChild(opt);
+    });
+    document.body.appendChild(dl);
+    document.getElementById('date-input').setAttribute('list', 'avail-dates');
+  } catch(e) {}
+})();
+
+// ─── Timeline ─────────────────────────────────────────────────────────────────
+const STAGE_COLORS = ['#6b7280','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
+
+function tsToX(ts) {
+  if (rangeMax === rangeMin) return svgW / 2;
+  return ((ts - rangeMin) / (rangeMax - rangeMin)) * svgW;
+}
+function xToTs(x) {
+  if (rangeMax === rangeMin) return rangeMin;
+  return rangeMin + (x / svgW) * (rangeMax - rangeMin);
+}
+
+function fmtTs(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts * 1000);
+  return d.toTimeString().slice(0, 8);
+}
+
+function buildTimeline() {
+  const svg = document.getElementById('timeline');
+  svgW = svg.getBoundingClientRect().width || 800;
+  svg.setAttribute('width', svgW);
+  svg.innerHTML = '';
+
+  if (!records.length) return;
+
+  const H = 44;  // total SVG height
+  const TRACK_H = 20;
+  const AXIS_Y  = 40;
+
+  // ── Helper to create SVG element ──
+  function el(tag, attrs) {
+    const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k, v));
+    return e;
+  }
+
+  // Background
+  svg.appendChild(el('rect', {x:0, y:0, width:svgW, height:H, fill:'#f9fafb'}));
+
+  // ── On-control track (y=0-20) ─────────────────────────────────────────────
+  if (hbRecs.length > 0) {
+    for (let i = 0; i < hbRecs.length; i++) {
+      const hb   = hbRecs[i];
+      const next = hbRecs[i + 1];
+      const x1   = tsToX(hb.ts);
+      const x2   = next ? tsToX(next.ts) : svgW;
+      const on   = hb.on_ctrl === 1;
+      const cs   = hb.cs || 0;
+      const fill = on
+        ? (STAGE_COLORS[cs] || STAGE_COLORS[0])
+        : '#374151';
+      svg.appendChild(el('rect', {x:x1, y:1, width:Math.max(1, x2-x1), height:TRACK_H-1, fill, opacity:on?'0.85':'0.5'}));
+    }
+  } else {
+    svg.appendChild(el('rect', {x:0, y:1, width:svgW, height:TRACK_H-1, fill:'#e5e7eb'}));
+  }
+
+  // EC indicator (amber overlay on control track when ec>0)
+  hbRecs.filter(h => h.ec > 0).forEach((hb, i, arr) => {
+    const next = hbRecs[hbRecs.indexOf(hb) + 1];
+    const x1   = tsToX(hb.ts);
+    const x2   = next ? tsToX(next.ts) : svgW;
+    svg.appendChild(el('rect', {x:x1, y:1, width:Math.max(1,x2-x1), height:4, fill:'#f59e0b', opacity:'0.8'}));
+  });
+
+  // ── Event row (y=20-38) ───────────────────────────────────────────────────
+  svg.appendChild(el('rect', {x:0, y:TRACK_H, width:svgW, height:18, fill:'#f0f2f5'}));
+  svg.appendChild(el('line', {x1:0, y1:TRACK_H, x2:svgW, y2:TRACK_H, stroke:'#e5e7eb', 'stroke-width':'1'}));
+
+  // Stage-start ticks (type 1/1 msgs) — cyan ticks
+  msgRecs.filter(m => m.type===1 && m.sub===1).forEach(m => {
+    const x = tsToX(m.ts);
+    svg.appendChild(el('line', {x1:x, y1:TRACK_H+1, x2:x, y2:TRACK_H+10, stroke:'#06b6d4', 'stroke-width':'1.5', opacity:'0.8'}));
+  });
+
+  // Stage change ticks (type 5) — white dashes
+  msgRecs.filter(m => m.type===5).forEach(m => {
+    const x = tsToX(m.ts);
+    svg.appendChild(el('line', {x1:x, y1:TRACK_H+1, x2:x, y2:TRACK_H+16, stroke:'#ffffff', 'stroke-width':'1', opacity:'0.7'}));
+  });
+
+  // Error markers — red
+  errRecs.forEach(e => {
+    const x = tsToX(e.ts);
+    const pts = `${x},${TRACK_H+18} ${x-3},${TRACK_H+8} ${x+3},${TRACK_H+8}`;
+    svg.appendChild(el('polygon', {points:pts, fill:'#ef4444', opacity:'0.9'}));
+  });
+
+  // ── Time axis (y=38-44) ───────────────────────────────────────────────────
+  const rangeS = rangeMax - rangeMin;
+  let tickStep = 300;  // 5 min
+  if (rangeS > 4*3600)  tickStep = 1800;  // 30 min
+  else if (rangeS > 1*3600) tickStep = 900;  // 15 min
+
+  const firstTick = Math.ceil(rangeMin / tickStep) * tickStep;
+  for (let ts = firstTick; ts <= rangeMax; ts += tickStep) {
+    const x = tsToX(ts);
+    svg.appendChild(el('line', {x1:x, y1:38, x2:x, y2:44, stroke:'#9ca3af', 'stroke-width':'1'}));
+    const txt = el('text', {x:x+2, y:43, fill:'#9ca3af', 'font-size':'8', 'font-family':'Courier New,monospace'});
+    txt.textContent = fmtTs(ts);
+    svg.appendChild(txt);
+  }
+
+  // ── Cursor line (drawn last, on top) ──────────────────────────────────────
+  const cursorLine = el('line', {
+    id:'cursor-line', x1:0, y1:0, x2:0, y2:H,
+    stroke:'#ef4444', 'stroke-width':'1.5', opacity:'0.9'
+  });
+  svg.appendChild(cursorLine);
+
+  // ── Update stat display ───────────────────────────────────────────────────
+  const startStr = fmtTs(rangeMin);
+  const endStr   = fmtTs(rangeMax);
+  document.getElementById('tl-stat').textContent =
+    `${startStr} – ${endStr}  ·  ${Math.round(rangeS/60)} min`;
+
+  drawCursorLine();
+}
+
+function drawCursorLine() {
+  const line = document.getElementById('cursor-line');
+  if (!line || !rangeMin) return;
+  const x = tsToX(cursorTs);
+  line.setAttribute('x1', x);
+  line.setAttribute('x2', x);
+}
+
+// ─── Cursor control ───────────────────────────────────────────────────────────
+function setCursor(ts) {
+  if (!rangeMin) return;
+  cursorTs = Math.max(rangeMin, Math.min(rangeMax, ts));
+  document.getElementById('cursor-ts').textContent = fmtTs(cursorTs);
+  drawCursorLine();
+  if (!rafPending) {
+    rafPending = true;
+    requestAnimationFrame(() => { renderActiveTab(); rafPending = false; });
+  }
+}
+
+document.getElementById('btn-back').addEventListener('click',  () => setCursor(cursorTs - 60));
+document.getElementById('btn-fwd').addEventListener('click',   () => setCursor(cursorTs + 60));
+document.getElementById('btn-start').addEventListener('click', () => setCursor(rangeMin));
+document.getElementById('btn-end').addEventListener('click',   () => setCursor(rangeMax));
+
+// Timeline mouse interaction
+const tlSvg = document.getElementById('timeline');
+tlSvg.addEventListener('mousedown', e => {
+  if (!rangeMin) return;
+  dragging = true;
+  const rect = tlSvg.getBoundingClientRect();
+  svgW = rect.width;
+  setCursor(xToTs(e.clientX - rect.left));
+});
+document.addEventListener('mousemove', e => {
+  if (!dragging || !rangeMin) return;
+  const rect = tlSvg.getBoundingClientRect();
+  svgW = rect.width;
+  setCursor(xToTs(e.clientX - rect.left));
+});
+document.addEventListener('mouseup', () => { dragging = false; });
+
+// Rebuild timeline on resize
+window.addEventListener('resize', () => {
+  if (records.length) buildTimeline();
+});
+
+// ─── Tab rendering dispatch ───────────────────────────────────────────────────
+function renderActiveTab() {
+  if (!records.length) return;
+  switch (activeTab) {
+    case 'tma':        renderTMA();        break;
+    case 'detcounts':  renderDetCounts();  break;
+    case 'satflow':    renderSatFlow();    break;
+    case 'derived':  renderDerived();  break;
+    case 'messages': renderMessages(); break;
+    case 'errors':   renderErrors();   break;
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function lastAtTs(arr, ts) {
+  // Last element with .ts <= ts (arr sorted ascending)
+  let result = null;
+  for (const r of arr) { if (r.ts <= ts) result = r; else break; }
+  return result;
+}
+
+function allUpTo(arr, ts) {
+  // All elements with .ts <= ts
+  const out = [];
+  for (const r of arr) { if (r.ts <= ts) out.push(r); else break; }
+  return out;
+}
+
+// ─── Det count history helpers ────────────────────────────────────────────────
+// tmaRecs: {t:'tma', ts, dc:[...]} — cumulative rising-edge counts per detector
+// Since counts are monotonically increasing (never reset except dataset reload),
+// delta = cur.dc[i] - prev.dc[i]. A jump backwards means a stream restart; treat
+// it as the full current value.
+function computeDetDeltas(tmaRecs) {
+  // tmaRecs: [{t:'tma', ts, pstart, psec, dc:[...]}] sorted asc
+  // dc[] is cumulative within the TMAPRD period identified by pstart.
+  // New pstart → period reset → dc values ARE the delta from period start.
+  const out = [];
+  for (let i = 0; i < tmaRecs.length; i++) {
+    const cur  = tmaRecs[i];
+    const prev = i > 0 ? tmaRecs[i-1] : null;
+    const n    = (cur.dc||[]).length;
+    const delta = new Array(n).fill(0);
+    const samePeriod = prev && prev.pstart === cur.pstart;
+    for (let d = 0; d < n; d++) {
+      const cv = cur.dc[d]||0;
+      const pv = samePeriod ? (prev.dc[d]||0) : 0;
+      delta[d] = Math.max(0, cv - pv);
+    }
+    out.push({ts: cur.ts, pstart: cur.pstart, delta});
+  }
+  return out;
+}
+
+// Sum deltas from index start..end (inclusive) into a per-detector total array
+function sumDeltas(deltas, startIdx, endIdx) {
+  const n   = deltas.length ? (deltas[0].delta||[]).length : 0;
+  const sum = new Array(n).fill(0);
+  for (let i = Math.max(0,startIdx); i <= Math.min(deltas.length-1, endIdx); i++) {
+    for (let d = 0; d < n; d++) sum[d] += deltas[i].delta[d]||0;
+  }
+  return sum;
+}
+
+// ─── TMA tab ──────────────────────────────────────────────────────────────────
+function renderTMA() {
+  const el = document.getElementById('tab-tma');
+  const msgs = allUpTo(msgRecs, cursorTs);
+  const t11  = msgs.filter(m => m.type===1 && m.sub===1);  // sorted asc by ts
+  const t12  = msgs.filter(m => m.type===1 && m.sub===2);
+
+  if (!t11.length) {
+    el.innerHTML = '<div class="empty">No stage-start messages up to cursor position.</div>';
+    return;
+  }
+
+  // Correlate type 1/2 → type 1/1 by nearest ts (both from same stage-start tick, within 1s).
+  // type 1/2 raw: [2]=cycle_tenths, [3..]=drift_max — no HH:MM:SS.
+  function cycleLookup(ts) {
+    let best = null, bestDiff = 1.0;
+    for (const m of t12) {
+      const d = Math.abs(m.ts - ts);
+      if (d < bestDiff) { bestDiff = d; best = m; }
+    }
+    return best ? (best.raw||[])[2] : null;
+  }
+
+  // Build newest-first display list (t11 is sorted asc, so reverse)
+  const newest = t11.slice().reverse();
+  const display = newest.slice(0, 300);
+
+  let html = `<table class="tma-table">
+    <thead><tr>
+      <th style="width:80px">Time</th>
+      <th style="width:55px">Stage</th>
+      <th style="width:65px" title="Actual green: time from this stage start to next">Green (s)</th>
+      <th style="width:70px" title="Smoothed cycle time from type 1/2 (SMCYC)">Cycle (s)</th>
+      <th>Lane Flows (veh/hr)</th>
+    </tr></thead><tbody>`;
+
+  display.forEach((m, i) => {
+    const raw  = m.raw||[];
+    const stage = raw[2]||0;
+    const hh=raw[3]||0, mm=raw[4]||0, ss=raw[5]||0;
+    const flows = [];
+    const laneCount = dims.no_lanes || raw.length;
+    for (let j = 6; j < 6 + laneCount && j < raw.length; j++) flows.push(raw[j] || 0);
+    const timeStr = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+
+    // Green duration: ts of this entry minus ts of the next older entry (newest[i+1])
+    const older = newest[i + 1];
+    const greenS = older ? (m.ts - older.ts) : null;
+    const greenStr = greenS != null ? greenS.toFixed(1)+'s' : (i===0 ? '…' : '—');
+    const greenCls = greenS != null && greenS < 3.0 ? 'color:var(--amber);font-weight:600' : 'color:var(--green);font-weight:600';
+
+    const cyc_tenths = cycleLookup(m.ts);
+    const cycStr = cyc_tenths != null ? (cyc_tenths/10).toFixed(1)+'s' : '—';
+
+    html += `<tr>
+      <td>${timeStr}</td>
+      <td><span class="stage-badge">Stg ${stage}</span></td>
+      <td><span style="${greenCls}">${greenStr}</span></td>
+      <td>${cycStr}</td>
+      <td>${flows.map((f,j)=>`<span class="flow-val">L${j+1}:${f}</span>`).join(' ')}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  if (t11.length > 300) html = `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px">Showing 300 of ${t11.length} stage starts (newest first)</div>` + html;
+
+  el.innerHTML = html;
+}
+
+// ─── SatFlow tab ──────────────────────────────────────────────────────────────
+function renderSatFlow() {
+  const el = document.getElementById('tab-satflow');
+  const lastFlow = lastAtTs(msgRecs.filter(m => m.type===1 && m.sub===1), cursorTs);
+  const lastOpt  = lastAtTs(msgRecs.filter(m => m.type===4), cursorTs);
+  const lastCyc  = lastAtTs(msgRecs.filter(m => m.type===1 && m.sub===2), cursorTs);
+
+  let html = '';
+
+  // Optimiser panel
+  if (lastOpt) {
+    const r   = lastOpt.raw||[];
+    const ben = r[4]||0, dis = r[5]||0, pr = r[6]||0;
+    const cyc = (lastCyc&&lastCyc.raw) ? (lastCyc.raw[2]||0)/10 : null;
+    html += `<div class="sf-title">Optimiser Status <span style="font-weight:400;color:var(--muted);font-size:9px">@ ${fmtTs(lastOpt.ts)}</span></div>
+    <div class="opt-panel">
+      <div class="opt-grid">
+        <div class="opt-item"><label>Benefit</label><span>${ben}</span></div>
+        <div class="opt-item"><label>Disbenefit</label><span>${dis}</span></div>
+        <div class="opt-item"><label>Pred. Red (s)</label><span>${pr}</span></div>
+        ${cyc!=null?`<div class="opt-item"><label>Cycle Time</label><span>${cyc.toFixed(1)}s</span></div>`:''}
+      </div>
+    </div>`;
+  } else {
+    html += '<div class="opt-panel"><span class="empty">No optimiser data up to cursor.</span></div>';
+  }
+
+  // Lane flow cards — kernel smoothed
+  html += '<div class="sf-title">Kernel Smoothed Flow (veh/hr)</div>';
+  if (lastFlow) {
+    const r = lastFlow.raw||[];
+    const flows = [];
+    const lc = dims.no_lanes || r.length;
+    for (let i = 6; i < 6 + lc && i < r.length; i++) flows.push(r[i] || 0);
+    if (flows.length) {
+      const maxF = Math.max(...flows, 1);
+      html += `<div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:8px">@ ${fmtTs(lastFlow.ts)} · kernel exponential smoothing</div>`;
+      html += '<div class="lane-cards">';
+      flows.forEach((f, i) => {
+        const hi  = f > 800;
+        const cls = hi ? 'high' : '';
+        html += `<div class="lane-card ${cls}">
+          <div class="lane-num">Lane ${i+1}${hi?' HIGH':''}</div>
+          <div class="lane-flow">${f}</div>
+          <div class="lane-unit">veh/hr</div>
+          <div class="lane-bar"><div class="lane-bar-fill" style="width:${Math.round(f/maxF*100)}%"></div></div>
+        </div>`;
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="empty">No lane data in message.</div>';
+    }
+  } else {
+    html += '<div class="empty">No stage-start messages up to cursor.</div>';
+  }
+
+  // Observed flow from detector counts (rolling window up to 1h)
+  const HOUR_S   = 3600;
+  const winEnd   = cursorTs;
+  const winStart = cursorTs - HOUR_S;
+  const tmaWin   = tmaRecs_all.filter(r => r.ts >= winStart && r.ts <= winEnd);
+
+  if (tmaWin.length >= 2 && detectorMeta.length) {
+    const deltas    = computeDetDeltas(tmaWin);
+    const nDets     = deltas[0].delta.length;
+    const totals    = new Array(nDets).fill(0);
+    deltas.forEach(d => { for (let i = 0; i < nDets; i++) totals[i] += d.delta[i] || 0; });
+
+    const actualS   = tmaWin[tmaWin.length - 1].ts - tmaWin[0].ts;
+    const scale     = actualS > 0 ? 3600 / actualS : 1;
+
+    // Map X-type detectors to lanes
+    const detLookup = {};
+    for (const m of detectorMeta) detLookup[m.id] = m;
+    const nLanes  = dims.no_lanes || 0;
+    const obsFlow = new Array(nLanes).fill(0);
+    let   hasObs  = false;
+    for (let detId = 1; detId <= nDets; detId++) {
+      const meta = detLookup[detId];
+      if (!meta || !meta.lane) continue;
+      if ((meta.type || '').toUpperCase().startsWith('X')) {
+        const li = meta.lane - 1;
+        if (li >= 0 && li < nLanes) {
+          obsFlow[li] += Math.round((totals[detId - 1] || 0) * scale);
+          hasObs = true;
+        }
+      }
+    }
+
+    if (hasObs) {
+      const windowLabel = actualS >= 3540 ? '1h' : `${Math.round(actualS / 60)}m`;
+      html += `<div class="sf-title" style="margin-top:14px">Observed Flow (${windowLabel}) <span style="font-weight:400;color:var(--muted);font-size:9px">X-type detector counts · annualised to veh/hr</span></div>`;
+      html += `<div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:8px">${fmtTs(tmaWin[0].ts)} – ${fmtTs(tmaWin[tmaWin.length-1].ts)} · ${tmaWin.length} samples</div>`;
+      html += '<div class="lane-cards">';
+      const maxObs = Math.max(...obsFlow, 1);
+      obsFlow.forEach((f, i) => {
+        const hi  = f > 800;
+        const cls = hi ? 'high' : '';
+        html += `<div class="lane-card ${cls}">
+          <div class="lane-num">Lane ${i+1}${hi?' HIGH':''}</div>
+          <div class="lane-flow">${f}</div>
+          <div class="lane-unit">veh/hr</div>
+          <div class="lane-bar"><div class="lane-bar-fill" style="width:${Math.round(f/maxObs*100)}%"></div></div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+  }
+
+  el.innerHTML = html;
+}
+
+// ─── Derived state replay ─────────────────────────────────────────────────────
+function initDerivedState(d) {
+  const nl=d.no_links||0, nla=d.no_lanes||0, ns=d.no_stages||0, nd=d.no_dets||0;
+  return {
+    no_links:nl, no_lanes:nla, no_stages:ns, no_dets:nd,
+    endsat_link:new Array(nl).fill(0), endsat_any:0,
+    ep_hold:0, ep_ext:0, ep_timer:0,
+    vdg_active:0, vdg_stage_min:0, vdg_link_min:new Array(nl).fill(0),
+    benefit:0, disbenefit:0, predicted_red:0, oversaturated:0,
+    osat_threshold:20, flow_threshold:800,
+    link_netben:new Array(nl).fill(0), link_ben:new Array(nl).fill(0),
+    link_fred:new Array(nl).fill(0), link_xg:new Array(nl).fill(0),
+    osat_es:new Array(nl).fill(0),
+    smoothed_flow:new Array(nla).fill(0), lane_sat:new Array(nla).fill(0),
+    junction_flow:0, lao_smx:0, lam:0, cut_max:0, high_flow:0,
+    cycle_time:0, drift_max:new Array(ns).fill(0),
+    suspect_dets:new Array(nd).fill(0), suspect_any:0,
+    stage_demand:new Array(ns).fill(0), link_bonus:new Array(nl).fill(0),
+    em_pr_truncation:0, em_stage:0, pr_stage:0,
+    healthy:0, plan_id:0,
+  };
+}
+
+function applyMsg(st, msg) {
+  const t=msg.type, s=msg.sub, raw=msg.raw||[];
+  const r=(i)=>(i<raw.length?(raw[i]|0):0);
+  const NL=st.no_links, NLA=st.no_lanes, NS=st.no_stages, ND=st.no_dets;
+
+  if (t===1&&s===1) {
+    let i=6;
+    for (let ln=0;ln<NLA;ln++) st.smoothed_flow[ln]=r(i+ln);
+    i+=NLA; st.junction_flow=r(i); i++;
+    for (let ln=0;ln<NLA;ln++) st.lane_sat[ln]=r(i+ln);
+    i+=NLA; st.lao_smx=r(i); st.lam=r(i+1); st.cut_max=r(i+3);
+    st.high_flow=st.smoothed_flow.some(f=>f>800)?1:0;
+    st.ep_hold=st.ep_ext=st.vdg_active=0;
+  } else if (t===1&&s===2) {
+    st.cycle_time=r(2);
+    for (let st2=0;st2<NS;st2++) st.drift_max[st2]=r(3+st2);
+    const i=3+NS;
+    for (let d=0;d<ND;d++) st.suspect_dets[d]=r(i+d);
+    st.suspect_any=st.suspect_dets.some(x=>x)?1:0;
+  } else if (t===2) {
+    st.vdg_stage_min=r(3);
+    for (let lk=0;lk<NL;lk++) st.vdg_link_min[lk]=r(4+lk);
+    st.vdg_active=1;
+  } else if (t===3&&s!==2) {
+    for (let lk=0;lk<NL;lk++) st.endsat_link[lk]=r(4+lk);
+    st.endsat_any=st.endsat_link.some(x=>x)?1:0;
+  } else if (t===3&&s===2) {
+    st.ep_timer=r(2); st.ep_hold=r(4); st.ep_ext=r(5);
+  } else if (t===4) {
+    st.benefit=r(4); st.disbenefit=r(5); st.predicted_red=r(6);
+    st.oversaturated=st.disbenefit>20?1:0;
+    let i=7;
+    while (i+4<s&&i+4<raw.length) {
+      const lk=r(i)-1;
+      if (lk>=0&&lk<NL) { st.link_netben[lk]=r(i+1);st.link_ben[lk]=r(i+2);st.link_fred[lk]=r(i+3);st.link_xg[lk]=r(i+4); }
+      i+=5;
+    }
+  } else if (t===5&&s===3) {
+    for (let lk=0;lk<NL;lk++) st.osat_es[lk]=r(7+lk);
+  } else if (t===5&&s===4) {
+    st.em_pr_truncation=1; st.em_stage=r(7); st.pr_stage=r(8);
+  } else if (t===6&&s===1) {
+    for (let st2=0;st2<NS;st2++) st.stage_demand[st2]=r(3+st2);
+    for (let lk=0;lk<NL;lk++) st.link_bonus[lk]=r(3+NS+lk);
+    st.ep_hold=st.em_pr_truncation=0;
+  }
+}
+
+// ─── Derived tab ──────────────────────────────────────────────────────────────
+function renderDerived() {
+  const el   = document.getElementById('tab-derived');
+  const msgs = allUpTo(msgRecs, cursorTs);
+  const hb   = lastAtTs(hbRecs, cursorTs);
+
+  const d = initDerivedState(dims);
+  for (const msg of msgs) applyMsg(d, msg);
+  if (hb) {
+    d.healthy  = (hb.on_ctrl===1 && hb.ec===0) ? 1 : 0;
+    d.plan_id  = hb.plan || 0;
+  }
+
+  const ec     = hb ? hb.ec    : 0;
+  const onCtrl = hb ? hb.on_ctrl : 0;
+  const cs     = hb ? hb.cs : null;
+  const ds_val = hb ? hb.ds : null;
+  const ns_val = hb ? hb.ns : null;
+
+  function ind(label, val, cls, tip) {
+    return `<div class="indicator ${cls}" title="${tip||''}">
+      <div class="indicator-label">${label}</div>
+      <div class="indicator-val">${val}</div>
+    </div>`;
+  }
+
+  function numCell(label, val, cls, pct, barCls, tip) {
+    const bar = pct!=null
+      ? `<div class="num-bar"><div class="num-bar-fill ${barCls||''}" style="width:${Math.min(100,Math.max(0,pct))}%"></div></div>`
+      : '';
+    return `<div class="num-cell" title="${tip||''}">
+      <div class="num-label">${label}</div>
+      <div class="num-val ${cls||''}">${val}</div>${bar}
+    </div>`;
+  }
+
+  let html = '';
+
+  // Status indicators
+  html += `<div class="card"><div class="card-hdr">Status at ${fmtTs(cursorTs)}</div><div class="card-body"><div class="indicator-row">
+    ${ind('HEALTHY',    d.healthy?'YES':'NO', d.healthy?'on':'', 'ON_CONTROL=1, EC=0')}
+    ${ind('ON CTRL',    onCtrl?'YES':'NO',    onCtrl?'on':'',    'Kernel on_ctrl from heartbeat')}
+    ${ind('EC',         ec,                   ec>=20?'alert':ec>0?'warn':'on', 'Error count (0=clean, ≥20=hard fault)')}
+    ${ind('OSAT',       d.oversaturated?'YES':'NO', d.oversaturated?'alert':'', `Disbenefit > ${d.osat_threshold}`)}
+    ${ind('HIGH FLOW',  d.high_flow?'YES':'NO',     d.high_flow?'warn':'', 'Any lane > 800 veh/hr')}
+    ${ind('ENDSAT',     d.endsat_any?'YES':'NO',    d.endsat_any?'warn':'', 'Any link at saturation')}
+    ${ind('VDG',        d.vdg_active?'ON':'OFF',    d.vdg_active?'on':'', `Var min green — stage min: ${d.vdg_stage_min}s`)}
+    ${ind('EP HOLD',    d.ep_hold?'ON':'OFF',        d.ep_hold?'warn':'', 'Extension period hold')}
+    ${ind('EP EXT',     d.ep_ext?'ON':'OFF',         d.ep_ext?'warn':'', 'Extension period extending')}
+    ${ind('EM/PR',      d.em_pr_truncation?'YES':'NO', d.em_pr_truncation?'blue':'', `EM stage:${d.em_stage||0} PR stage:${d.pr_stage||0}`)}
+    ${ind('PLAN',       d.plan_id||'—', d.plan_id?'on':'', 'Active data plan')}
+    ${ind('KS',         cs!=null?cs:'—', '', 'Current stage (from heartbeat)')}
+    ${ind('DS',         ds_val!=null?ds_val:'—', '', 'Demanded stage (from heartbeat)')}
+    ${ind('NS',         ns_val!=null?ns_val:'—', '', 'Next stage (from heartbeat)')}
+  </div></div></div>`;
+
+  // Optimiser
+  html += `<div class="card"><div class="card-hdr">Optimiser</div><div class="card-body"><div class="num-row">
+    ${numCell('BENEFIT',    d.benefit||0,    (d.benefit||0)>=0?'pos':'neg', Math.abs(d.benefit||0)/2, 'green', 'Net optimiser benefit')}
+    ${numCell('DISBENEFIT', d.disbenefit||0, (d.disbenefit||0)>20?'neg':'', Math.min(100,(d.disbenefit||0)*2), (d.disbenefit||0)>20?'red':'amber', 'Junction over-saturation')}
+    ${numCell('PRED RED',   d.predicted_red||0, (d.predicted_red||0)>50?'neg':'', Math.min(100,d.predicted_red||0), (d.predicted_red||0)>50?'amber':'green', 'Predicted red (s)')}
+    ${numCell('CYCLE',      d.cycle_time?(d.cycle_time)+'s':'—', '', Math.min(100,(d.cycle_time||0)/120*100), 'green', 'Cycle time from type 1/2')}
+    ${numCell('JCN FLOW',   d.junction_flow||0, '', Math.min(100,(d.junction_flow||0)/20), 'green', 'Junction smoothed flow')}
+    ${numCell('LAM',        d.lam||0, '', 0, '', 'Lane approach management index')}
+  </div></div></div>`;
+
+  // Per-link table
+  if (d.no_links > 0) {
+    let tbl = `<table class="grid-table"><thead><tr>
+      <th>LINK</th><th title="Endsat">ENDSAT</th><th title="Net benefit">NET BEN</th>
+      <th title="Benefit">BEN</th><th title="Free red %">FREE RED%</th>
+      <th title="Excess green %">XCESS GRN%</th><th title="VDG min green">VDG(s)</th>
+      <th title="OSAT+ES">OSAT+ES</th><th title="Bonus">BONUS</th>
+    </tr></thead><tbody>`;
+    for (let lk=0;lk<d.no_links;lk++) {
+      const es=(d.endsat_link||[])[lk]||0, nb=(d.link_netben||[])[lk]||0;
+      const ben=(d.link_ben||[])[lk]||0, fr=(d.link_fred||[])[lk]||0;
+      const xg=(d.link_xg||[])[lk]||0, vdg=(d.vdg_link_min||[])[lk]||0;
+      const oe=(d.osat_es||[])[lk]||0, bon=(d.link_bonus||[])[lk]||0;
+      tbl += `<tr>
+        <td><strong>L${lk+1}</strong></td>
+        <td class="${es?'warn':''}">${es?'■ YES':'—'}</td>
+        <td class="${nb>0?'on':nb<0?'alert':''}">${nb}</td>
+        <td class="${ben>0?'on':''}">${ben}</td>
+        <td class="${fr>60?'warn':''}">${fr}%</td>
+        <td class="${xg>60?'blue':''}">${xg}%</td>
+        <td class="${vdg>0?'on':''}">${vdg>0?vdg:'—'}</td>
+        <td class="${oe>50?'alert':oe>20?'warn':''}">${oe||'—'}</td>
+        <td class="${bon?'blue':''}">${bon?'■ YES':'—'}</td>
+      </tr>`;
+    }
+    tbl += '</tbody></table>';
+    html += `<div class="card"><div class="card-hdr">Per-Link Status</div><div class="card-body">${tbl}</div></div>`;
+  }
+
+  // Lane flows
+  if (d.no_lanes > 0) {
+    const flowMax=1800;
+    let flowHtml='<div class="flow-grid">';
+    for (let ln=0;ln<d.no_lanes;ln++) {
+      const f=(d.smoothed_flow||[])[ln]||0, sat=(d.lane_sat||[])[ln]||0;
+      const hi=f>800, cls=hi?'high':sat?'sat':'';
+      const pct=Math.min(100,(f/flowMax)*100);
+      flowHtml+=`<div class="flow-cell ${cls}" title="Lane ${ln+1}: ${f} veh/hr${sat?' SAT':''}${hi?' HIGH':''}">
+        <div class="flow-lane">L${ln+1}${sat?' SAT':''}</div>
+        <div class="flow-val2">${f}</div>
+        <div class="flow-bar2"><div class="flow-bar-fill2" style="width:${pct}%"></div></div>
+      </div>`;
+    }
+    flowHtml+='</div>';
+    if (d.junction_flow||d.lam) {
+      flowHtml+=`<div style="margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--muted)">
+        Jcn: ${d.junction_flow||0} veh/hr${d.lam?` · LAM: ${d.lam}`:''}${d.lao_smx?` · LAOSMX: ${d.lao_smx}`:''}
+      </div>`;
+    }
+    html+=`<div class="card"><div class="card-hdr">Lane Flows</div><div class="card-body">${flowHtml}</div></div>`;
+  }
+
+  // Stage demands
+  if (d.no_stages > 0) {
+    let dem='<div class="bit-row">';
+    for (let st=0;st<d.no_stages;st++) {
+      const v=(d.stage_demand||[])[st]||0;
+      dem+=`<div class="bit-cell ${v?'on':''}" title="Stage ${st+1} ${v?'demanded':'not demanded'} during last intergreen"><div class="bit-num">S${st+1}</div></div>`;
+    }
+    dem+='</div>';
+    if (d.cycle_time) {
+      dem+=`<div style="margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--muted)">Cycle: ${d.cycle_time}s</div>`;
+    }
+    html+=`<div class="card"><div class="card-hdr">Stage Demands (last intergreen)</div><div class="card-body">${dem}</div></div>`;
+  }
+
+  // EP / VDG
+  html+=`<div class="card"><div class="card-hdr">EP / VDG / EM-PR</div><div class="card-body"><div class="indicator-row">
+    ${ind('EP HOLD',  d.ep_hold?'HOLDING':'CLEAR',    d.ep_hold?'warn':'', 'Extension period hold marker')}
+    ${ind('EP EXT',   d.ep_ext?'EXTENDING':'CLEAR',   d.ep_ext?'warn':'',  'Extension period extension marker')}
+    ${ind('VDG',      d.vdg_active?(d.vdg_stage_min+'s'):'OFF', d.vdg_active?'on':'', 'Variable min green active')}
+    ${ind('EM STG',   d.em_stage||'—',   d.em_pr_truncation?'blue':'', 'Early minimum demanded stage')}
+    ${ind('PR STG',   d.pr_stage||'—',   d.em_pr_truncation?'blue':'', 'Predicted red demanded stage')}
+  </div></div></div>`;
+
+  // Suspect detectors
+  if (d.no_dets > 0) {
+    const suspects = (d.suspect_dets||[]).map((v,i)=>v?i+1:null).filter(Boolean);
+    let suspHtml = suspects.length
+      ? `<div style="color:var(--red);font-weight:600;font-family:var(--mono)">Suspect: ${suspects.map(n=>`D${n}`).join(' ')}</div>`
+      : `<div style="color:var(--green);font-weight:600;font-family:var(--mono)">✓ All detectors healthy</div>`;
+    html+=`<div class="card"><div class="card-hdr">Suspect Detectors</div><div class="card-body">${suspHtml}</div></div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ─── Det Counts tab ───────────────────────────────────────────────────────────
+let allResetTs = -Infinity;   // "All" counts from this ts onwards (reset button sets this)
+const ALL_MAX  = 999999;      // auto-display-reset threshold
+
+function renderDetCounts() {
+  const el = document.getElementById('tab-detcounts');
+
+  // Get session record for detector_meta (from loaded records)
+  const sessionRec = records.find(r => r.t === 'session');
+  // Also try to get detector_meta from any hb record with meta, or from the slice endpoint
+  // We stored detector_meta in the session record — but current logger doesn't log it yet.
+  // Fall back to using dims + positional numbering if no meta.
+  const noDetectors = dims.no_dets || 0;
+
+  const tmaRecs = allUpTo(records.filter(r => r.t === 'tma'), cursorTs);
+
+  if (!tmaRecs.length) {
+    el.innerHTML = '<div class="empty">No detector count samples up to cursor. Counts are recorded every 60 s.</div>';
+    return;
+  }
+
+  const deltas = computeDetDeltas(tmaRecs);
+  if (!deltas.length) { el.innerHTML = '<div class="empty">No delta data.</div>'; return; }
+
+  // Cursor index in deltas array
+  const curIdx = deltas.length - 1;
+
+  // Last Min = most recent delta
+  const lm = deltas[curIdx].delta;
+
+  // Last Hour = sum of last 60 delta samples (60 min at 1 sample/min)
+  const lhStart = Math.max(0, curIdx - 59);
+  const lh = sumDeltas(deltas, lhStart, curIdx);
+
+  // All = sum of all deltas from allResetTs to cursor
+  const resetIdx = deltas.findIndex(d => d.ts >= allResetTs);
+  const allStart = resetIdx >= 0 ? resetIdx : 0;
+  const allSum   = sumDeltas(deltas, allStart, curIdx);
+
+  // Auto-reset display if any "All" count hits ALL_MAX
+  const hitMax = allSum.some(v => v >= ALL_MAX);
+
+  const nDets = lm.length;
+
+  // Build the HTML
+  // Header + reset button
+  let html = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+    <div style="font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">
+      Detector Counts @ ${fmtTs(cursorTs)}
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted)">
+      ${deltas.length} samples · ${fmtTs(deltas[allStart].ts)} → ${fmtTs(deltas[curIdx].ts)}
+    </div>
+    <button id="dc-reset-btn" style="margin-left:auto;background:var(--bg3);border:1px solid var(--border);
+      border-radius:3px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:var(--mono)"
+      title="Zero the All counter from the cursor position forwards">Reset All</button>
+    ${hitMax ? `<span style="color:var(--amber);font-size:10px;font-family:var(--mono)">⚠ All ≥ ${ALL_MAX.toLocaleString()} — reset recommended</span>` : ''}
+  </div>`;
+
+  // Legend
+  html += `<div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:10px">
+    <span style="font-weight:700">LM</span> = last minute &nbsp;·&nbsp;
+    <span style="font-weight:700">LH</span> = last hour (60 samples) &nbsp;·&nbsp;
+    <span style="font-weight:700">ALL</span> = from ${allResetTs === -Infinity ? 'start of loaded range' : fmtTs(allResetTs)} to cursor &nbsp;·&nbsp;
+    <span style="color:var(--amber)">amber</span> = IN/X &gt;20%Δ (lanes with both) &nbsp;·&nbsp;
+    <span style="color:var(--red)">red</span> = suspect
+  </div>`;
+
+  // Get detector metadata for labelling — if available from slice dimensions
+  // Build a lookup by 0-based detector index → {id, type, link, lane}
+  // (detector_meta uses 1-based det IDs)
+  // We can't get detector_meta from pure JSONL records unless we add it to session records.
+  // For now, use positional index and show Det N.
+  // TODO: add detector_meta to session record so history can show full labels.
+
+  // Build detector lookup: 1-based id → meta
+  const detLookup = {};
+  for (const m of detectorMeta) detLookup[m.id] = m;
+
+  const thCell = (txt, tip) =>
+    `<th style="text-align:left;padding:4px 8px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);background:var(--bg3);position:sticky;top:0;white-space:nowrap"${tip?` title="${tip}"`:''}>${txt}</th>`;
+
+  html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px">
+    <thead><tr>
+      ${thCell('Det')}
+      ${thCell('Type','Detector type from dataset')}
+      ${thCell('Link','Link number (1-based)')}
+      ${thCell('Lane','Lane number (1-based)')}
+      ${thCell('LM','Last minute actuation count')}
+      ${thCell('LH','Last hour (last 60 samples)')}
+      ${thCell('ALL','All counts from reset point to cursor')}
+    </tr></thead><tbody>`;
+
+  for (let i = 0; i < nDets; i++) {
+    const lmV  = lm[i]     || 0;
+    const lhV  = lh[i]     || 0;
+    const allV = Math.min(ALL_MAX, allSum[i] || 0);
+    const meta = detLookup[i + 1] || {};  // i is 0-based, id is 1-based
+
+    const rowBg  = lmV === 0 && lhV === 0 ? 'opacity:0.45' : '';
+    const lmStyle = lmV > 0 ? 'color:var(--accent2);font-weight:700' : 'color:var(--muted)';
+    const tip    = `Det ${i+1}${meta.type ? ' · '+meta.type : ''}${meta.link != null ? ' · Lk'+meta.link : ''}${meta.lane != null ? ' · Ln'+meta.lane : ''}${meta.dist != null && meta.dist < 999990 ? ' · '+meta.dist.toFixed(1)+'m' : ''}`;
+
+    html += `<tr style="${rowBg}" title="${tip}">
+      <td style="padding:4px 8px;border-bottom:1px solid var(--border);font-weight:600">D${i+1}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid var(--border)">${meta.type || '—'}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center">${meta.link != null ? meta.link : '—'}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center">${meta.lane != null ? meta.lane : '—'}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;${lmStyle}">${lmV||'—'}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center">${lhV||'—'}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid var(--border);text-align:center;${allV>=ALL_MAX?'color:var(--amber)':''}">${allV>=ALL_MAX?(ALL_MAX.toLocaleString()+'+'):allV||'—'}</td>
+    </tr>`;
+  }
+
+  html += `</tbody></table></div>`;
+  el.innerHTML = html;
+
+  // Wire reset button
+  const btn = document.getElementById('dc-reset-btn');
+  if (btn) btn.addEventListener('click', () => {
+    allResetTs = cursorTs;
+    renderDetCounts();
+  });
+}
+
+// ─── Messages tab ─────────────────────────────────────────────────────────────
+const MSG_LABELS = {
+  '1/1':'Stg Start','1/2':'Cycle','2/0':'VDG','3/0':'Endsat','3/2':'EP',
+  '4/0':'Optimiser','5/1':'Stg Chg','5/3':'OSAT+ES','5/4':'EM/PR Trunc','6/1':'Intergreen'
+};
+const MSG_TYPE_LABEL = (t,s) => MSG_LABELS[`${t}/${s}`] || MSG_LABELS[`${t}/0`] || `${t}/${s}`;
+
+function renderMessages() {
+  const el   = document.getElementById('tab-messages');
+  const msgs = allUpTo(msgRecs, cursorTs);
+
+  if (!msgs.length) {
+    el.innerHTML = '<div class="empty">No messages up to cursor.</div>';
+    return;
+  }
+
+  const display = msgs.slice().reverse().slice(0, 500);
+
+  let html = '';
+  if (msgs.length > 500) html = `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px">Showing 500 of ${msgs.length} messages (newest first)</div>`;
+  html += `<table class="msg-table">
+    <thead><tr>
+      <th style="width:70px">Time</th>
+      <th style="width:90px">Type</th>
+      <th>Description</th>
+    </tr></thead><tbody>`;
+  display.forEach(m => {
+    const ts  = fmtTs(m.ts);
+    const lbl = MSG_TYPE_LABEL(m.type, m.sub);
+    html += `<tr>
+      <td>${ts}</td>
+      <td><span class="msg-type">${lbl}</span></td>
+      <td class="msg-desc">${m.desc||''}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ─── Errors tab ───────────────────────────────────────────────────────────────
+const ERR_LABELS = {
+  1:'Back On Line',2:'Stage Not Ended',3:'Intergreen Not Ended',4:'Invalid Stage',
+  5:'Wrong Stage Conf',6:'Faulty Detector',7:'Watchdog',8:'Program Error',
+  9:'CRB Off',10:'CRB On',11:'Multi Stage Conf',15:'MOVA Restarted',19:'Default Loaded'
+};
+const INFO_IDS = new Set([1,9,10,15,19]);
+
+function renderErrors() {
+  const el = document.getElementById('tab-errors');
+
+  if (!errRecs.length) {
+    el.innerHTML = '<div class="empty">No errors in loaded range.</div>';
+    return;
+  }
+
+  let html = `<table class="err-table">
+    <thead><tr>
+      <th style="width:80px">Time</th>
+      <th style="width:60px">Type</th>
+      <th style="width:120px">Error</th>
+      <th>Data</th>
+    </tr></thead><tbody>`;
+  errRecs.slice().reverse().forEach(e => {
+    const ts  = `${String(e.hours||0).padStart(2,'0')}:${String(e.minutes||0).padStart(2,'0')}`;
+    const lbl = ERR_LABELS[e.error_id] || `Error ${e.error_id}`;
+    const typ = INFO_IDS.has(e.error_id) ? 'info' : 'ids';
+    html += `<tr>
+      <td>${ts} ${e.day||''}/${e.month||''}</td>
+      <td><span class="err-badge ${typ}">${typ.toUpperCase()}</span></td>
+      <td>${lbl}</td>
+      <td style="color:var(--muted)">${e.data||0}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ─── Auto-load today on open ──────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
