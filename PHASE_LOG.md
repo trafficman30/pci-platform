@@ -640,3 +640,85 @@ dataset, derived, messages, errors, history, analysis, satflow, tma, syslog.
 **Outstanding:**
 - Phase 7.4: dashboard index.html
 - Phase 7.5: service pages (ug405, rtig, autodim, offline, agd, flir)
+
+**Outstanding:**
+- Phase 7.4: dashboard index.html
+- Phase 7.5: service pages (ug405, rtig, autodim, offline, agd, flir)
+
+---
+
+## 2026-06-03 — Phase 7.4 complete
+
+### Phase 7.4 — Main dashboard index.html  ✓ COMPLETE
+
+**Built:**
+- `web/static/index.html` — 809-line unified dashboard replacing Phase 2 proof-of-concept.
+
+**Layout:** topbar + `.page-body` (.sidebar + main) + footer — pci.css layout throughout.
+No inline CSS except `.streams-grid` (grid layout, not in pci.css) and `.btn:disabled` override.
+
+**Sidebar groups:**
+- MOVA Streams — dynamically populated by JS as stream SSEs connect; status dot per stream
+  (green = SSE live, red = disconnected)
+- UTC / SCOOT — UG405 (→ /ug405, status dot polled /api/ug405/ping)
+- IO — IOBus Signals (→ /iobus)
+- Services — RTIG, Autodim, Offline Plans, AGD, FLIR (→ /rtig etc., status dots polled every 5s)
+- Tools — System Log (opens /static/syslog.html popup)
+
+**SSE model (PCI adaptation from MOVA WebSocket):**
+- On load: `GET /api/mova/streams` → list of kernel IDs
+- One `EventSource` per stream at `/sse/mova/{id}`, re-discovered every 10s
+- Each SSE message is the stream's own snap (`{v,t,ts,...stream fields}`)
+- Snap message used directly as stream state (`msg.status`, `msg.buffers`, `msg.io` etc.)
+- Connection indicator: green if any stream SSE is live
+
+**Stream card JS (adapted from /opt/MOVA/pci_mova/web/static/index.html):**
+- `buildCard(id)` + `updateCard(id, s)` ported faithfully
+- Two status rows: CRB/OnControl/MOVAEnabled/ErrorCount/Warmup |
+  PM/CS/DS/NS/WaitT/WU/SCAN/SPEED/TIME/DATE
+- Bit grids: Detectors (with tooltips), Confirms, Force bits + TO, Special Outputs, HI/SYNC/FLT
+- Active faults list, sim panel (shown when `s.simulated_io` is true)
+- Collapse/expand with localStorage persistence (`pci-card-{id}-collapsed`)
+
+**XKOP panel:** dropped — driver_xkop.py handles hardware; not a UI concern.
+
+**Sim panel IO commands:** use `POST /api/mova/streams/{id}/cmd` with IPC commands:
+- `SET_CRB value`, `SET_CONFIRM index value`, `SET_DET index value`
+
+**Stream control buttons:**
+- Start — disabled when no dataset (tooltip "Load a dataset first");
+  enabled when dataset present → `SET_IO 19 1` (enable On Control)
+- Stop — confirm dialog → `UNLOAD`
+- Force — prompt → `FORCE_STAGE N`
+- Reset — confirm → `RESET`
+- Speed/TOD selects → `SET_SPEED N` / `SET_TOD_OFFSET N`
+- Dataset/Derived/Messages/Errors/History/Analysis → openWin to `/static/*.html?stream={id}`
+
+**Popup URLs:** `/static/dataset.html?stream=0` etc. — served by FastAPI static file mount.
+All 7 popup HTML files verified present in web/static/.
+
+**Service status polling:** `pollServices()` every 5s, pings all 6 service endpoints,
+updates nav-item-dot background (green/grey).
+
+**System Info panel:** collapsible (localStorage), calls `/api/licence/status` +
+`/api/licence/hardware`, shows kernel version, fingerprint, syslog button.
+
+**Footer:** tick (flips on each snap), local time, live/total stream count, kernel version,
+memory bar (green/amber/red thresholds from `/api/system/memory`).
+
+**Decisions:**
+- No `max_streams` WebSocket equivalent — footer shows live/total from SSE state
+- Dataset name shown as plain text (no download link — route not yet implemented)
+- Service page links (/ug405, /rtig etc.) will 404 until Phase 7.5
+- `discoverStreams()` runs every 10s to pick up kernels started after page load
+
+**Verification:**
+- HTML parse: OK
+- All required IDs present
+- All 7 popup file references verified against filesystem (all exist)
+- 809 lines, 35 JS functions
+
+**Outstanding:**
+- Phase 7.5: service pages (ug405.html, rtig.html, autodim.html, offline.html, agd.html, flir.html)
+- app.py popup routes (needed if popups served without /static/ prefix)
+- /api/system/memory and /api/licence/* routes not yet implemented — gracefully no-ops
