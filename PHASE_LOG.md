@@ -1359,3 +1359,90 @@ Import check passed.
 
 **Outstanding:**
 - Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+
+---
+
+## 2026-06-04 — Dataset fixes + button investigation
+
+### Dataset popup bugs fixed (all committed)
+
+**Bug 1 — list never rendered** (commit 1352b6c)
+`loadDsList()` read `j.datasets` but `/api/dataset/` returns a raw array.
+Fixed: `Array.isArray(j) ? j.map(e => e.name) : []`
+
+**Bug 2 — load panel stream selector empty** (commit 9e525c6)
+`/api/dataset/info/{name}` returned only stat data — no ControllerStream metadata.
+Fixed: call `load_all()` (pci_mova.dataset.parser) and return full streams dict
+matching MOVA's shape `{filename, streams:{id:{stream_id,title,stages,links,detectors}}}`.
+`sys.path.insert(0,'/opt/MOVA')` required — web process doesn't have MOVA on PYTHONPATH.
+Also fixed: `POST /{stream}/load` was using `stream_id` as kernel registry index
+instead of path param `stream`. Fixed to always use `stream` (path) for kernel lookup.
+
+**Bug 3 — dataset viewer tabs blank** (commit 5ecb586)
+`GET /api/dataset/detail/{stream}` returned minimal snap summary.
+Fixed: get `filename` + `stream_id_str` from snap, then call `parse_full_detail(path, id_str)`
+(pci_mova.dataset.parser) — same as MOVA. All tabs now populate (tested on X14860.mxds).
+
+---
+
+### Outstanding — popup buttons not connecting + ON_CONTROL badge
+
+Investigated the remaining button failures and status display issue.
+Nothing to commit — recording findings for next session.
+
+**Missing WebSocket endpoints in web/api/ws/live.py:**
+
+| Endpoint | Used by | Expects |
+|---|---|---|
+| `/ws/derived/{id}` | derived.html, satflow.html | `{derived, status, buffers, detector_meta, stream_id}` |
+| `/ws/messages/{id}` | messages.html, tma.html | `{messages: [{...}, ...]}` |
+| `/ws/errors/{id}` | errors.html | `{active: [...], history: [...]}` |
+| `/ws/tma/{id}` | tma.html | `{tma_counts, no_lanes, lane_has_both}` |
+
+PCI's IPC push socket already delivers:
+- `{t:"snap"}` — contains `derived`, `status`, `buffers.io`, `active_faults`, `detector_meta`
+- `{t:"msg"}` — individual kernel messages (pushed immediately via `messages_since`)
+- `{t:"fault"}` — fault events (pushed immediately from fault callback)
+
+**Implementation plan for each endpoint:**
+
+`/ws/derived/{id}` and `/ws/tma/{id}`:
+Subscribe to IPC push socket. On `{t:"snap"}`, extract and re-send fields in the
+expected shape. derived.html and satflow.html both consume the same endpoint.
+tma.html's `/ws/tma/` needs `tma_counts` — check if snap contains this or if
+it needs a separate derived field.
+
+`/ws/messages/{id}`:
+Subscribe to IPC push socket. Forward `{t:"msg"}` events as `{messages:[msg]}`.
+No history on connect (IPC delivers from subscription point only). Confirm whether
+messages.html/tma.html handle empty-history gracefully.
+
+`/ws/errors/{id}`:
+Subscribe to IPC push socket. Accumulate `{t:"fault"}` events locally as history.
+On each snap (which contains `active_faults`) or fault event, push
+`{active: snap.active_faults, history: accumulated[-200:]}`.
+
+**Missing log REST endpoints in web/api/routes/mova.py:**
+
+history.html and analysis.html both call:
+- `GET /api/streams/{id}/logs` → list available log dates
+- `GET /api/streams/{id}/log/slice?date=...` → read JSONL slice for that date
+- `GET /api/streams/{id}/log/export` → download/export log
+
+Log files live at `/opt/pci/logs/mova/stream_{N}_{YYYY-MM-DD}.jsonl(.gz)`.
+Read MOVA's `pci_mova/api/routes/streams.py` lines 274–420 before implementing.
+
+**ON_CONTROL badge showing when user did not explicitly start:**
+
+Status badge reads `status.current` from the snap. With sim driver CRB=1,
+MOVA transitions through WARMUP to ON_CONTROL automatically after ~64 ticks (6.4s).
+Also, `io[19]` (On Control flag) may persist from a previous session via
+`stream_state_0.json`. Investigate: check `/tmp/pci.mova.0.state.json` or
+`config/stream_state_0.json` for persisted io[19] value.
+This may be correct behaviour (kernel auto-starts when CRB ready and io[19]=1)
+or a state persistence issue. Clarify with Mick before changing.
+
+**Next session start order:**
+1. Add four missing WebSocket endpoints to live.py
+2. Add log REST endpoints to mova.py (read MOVA reference first)
+3. Investigate ON_CONTROL persistence
