@@ -90,8 +90,11 @@ class IPCServer:
                 conn, _ = srv.accept()
                 with self._cli_lock:
                     self._clients.append(conn)
-                log.debug("stream %d: push client connected (%d total)",
-                          self._sid, len(self._clients))
+                    total = len(self._clients)
+                if total == 1:
+                    log.info("stream %d: push client connected (1 total)", self._sid)
+                else:
+                    log.debug("stream %d: push client connected (%d total)", self._sid, total)
             except Exception as e:
                 log.error("stream %d: push accept error: %s", self._sid, e)
 
@@ -109,8 +112,12 @@ class IPCServer:
                 except Exception:
                     pass
                 self._clients.remove(c)
-                log.debug("stream %d: push client disconnected (%d total)",
-                          self._sid, len(self._clients))
+                remaining = len(self._clients)
+                if remaining == 0:
+                    log.info("stream %d: push client disconnected (0 total)", self._sid)
+                else:
+                    log.debug("stream %d: push client disconnected (%d total)",
+                              self._sid, remaining)
 
     def _push_loop(self):
         snap_ctr    = 0

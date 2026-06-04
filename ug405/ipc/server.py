@@ -95,7 +95,11 @@ class IPCServer:
                 conn, _ = srv.accept()
                 with self._cli_lock:
                     self._clients.append(conn)
-                log.debug("push client connected (%d total)", len(self._clients))
+                    total = len(self._clients)
+                if total == 1:
+                    log.info("push client connected (1 total)")
+                else:
+                    log.debug("push client connected (%d total)", total)
                 # Send current snapshot immediately on connect
                 if self._snap_cb:
                     try:
@@ -123,7 +127,11 @@ class IPCServer:
                 except Exception:
                     pass
                 self._clients.remove(c)
-                log.debug("push client disconnected (%d total)", len(self._clients))
+                remaining = len(self._clients)
+                if remaining == 0:
+                    log.info("push client disconnected (0 total)")
+                else:
+                    log.debug("push client disconnected (%d total)", remaining)
 
     def _send_to(self, conn, ev):
         conn.sendall((json.dumps(ev, default=str) + '\n').encode())

@@ -116,6 +116,8 @@ def main():
 
     from pci.shared.log import setup
     setup(f'pci.mova.{stream_id}')
+    # Suppress DEBUG/INFO noise from the pci_mova library — only WARNING+ passes through.
+    logging.getLogger('pci_mova').setLevel(logging.WARNING)
     log = logging.getLogger('pci.mova.kernel')
     log.info("starting stream %d  pid=%d", stream_id, os.getpid())
 
