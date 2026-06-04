@@ -1546,3 +1546,106 @@ or a state persistence issue. Clarify with Mick before changing.
 **Test results:**
 - Import check: `_POLL_SLEEP=0.05  _SNAP_TICKS=20  → snap every 1.0s` ✓
 - All JS changes at expected lines in index.html ✓
+
+---
+
+## NEXT SESSION START HERE — three log noise fixes
+
+### Context
+Three log-noise issues identified in live testing. Fix all three, commit. No other changes.
+
+---
+
+### Fix 1 — pci.offline opMode logged every second
+
+**File:** `offline/service.py`
+
+**Problem:** `UG405OpModeTracker._read_loop()` logs `opMode = N` every time any IPC
+message from pci.ug405 contains an `opmode` key. pci.ug405 includes opmode in every
+1Hz snap, so this fires every second even when opMode never changes.
+
+**Current code (exact):**
+```python
+if 'opmode' in ev:
+    with self._lock:
+        self._op_mode = ev['opmode']
+    log.info("opMode = %d", ev['opmode'])
+```
+
+**Fix:** move the log inside a change-detection check, keep the assignment unconditional:
+```python
+if 'opmode' in ev:
+    with self._lock:
+        if ev['opmode'] != self._op_mode:
+            log.info("opMode → %d", ev['opmode'])
+        self._op_mode = ev['opmode']
+```
+
+Log fires only when the value changes. Assignment always runs (keeps state current).
+
+---
+
+### Fix 2 — pci.ug405 SCOOT debug logged every 4 seconds in standalone
+
+**File:** `ug405/protocol/scoot.py`
+
+**Problem:** `log.debug("SCOOT %s packed=%s", ...)` fires every 4-second SCOOT sample
+interval regardless of whether SCOOT data is being sent to an instation. In standalone
+(opMode=1) or monitor (opMode=2) no data is sent, but the debug line fires constantly.
+
+**Current code (exact):**
+```python
+packed = self._pack_nibbles(counts, total_ticks)
+self._packed[scn] = packed
+log.debug("SCOOT %s packed=%s", scn, packed.hex())
+if self.on_sample:
+    self.on_sample(scn, packed)
+```
+
+**Fix:** move the log inside the `if self.on_sample:` block — only log when actually
+pushing to instation:
+```python
+packed = self._pack_nibbles(counts, total_ticks)
+self._packed[scn] = packed
+if self.on_sample:
+    log.debug("SCOOT %s packed=%s", scn, packed.hex())
+    self.on_sample(scn, packed)
+```
+
+`self.on_sample` is only set (and called) when SCOOT data is being sent to an instation
+(opMode=3, UTC control). Standalone/monitor modes compute the packed value for the SNMP
+reply but never call `on_sample`.
+
+---
+
+### Fix 3 — pci.autodim virt.dim write rejected every 30 seconds
+
+**File:** `config/signals.cfg`
+
+**Problem:** `pci.autodim` writes to signal `virt.dim` every 30-second tick but the
+signal is not declared in `signals.cfg`. IOBus rejects the write and logs a warning.
+The signal name `virt.dim` comes from the default in `config/autodim.cfg`.
+
+**Current state:** `signals.cfg` has no entry for `virt.dim` or any autodim signal.
+
+**Fix:** add one line to the `[signals]` section of `config/signals.cfg`:
+```ini
+virt.dim = pci.autodim
+```
+
+Add it after the `mova_fault` / special outputs block, with a comment:
+```ini
+# autodim output
+virt.dim   = pci.autodim
+```
+
+---
+
+### After all three fixes
+
+1. Import check: `python -c "from pci.offline.service import UG405OpModeTracker; from pci.ug405.protocol.scoot import ScootSampler; print('ok')"`
+2. Verify `signals.cfg` parses: `python -c "import configparser; c=configparser.ConfigParser(); c.read('config/signals.cfg'); print(c['signals']['virt.dim'])"`
+3. `git add offline/service.py ug405/protocol/scoot.py config/signals.cfg`
+4. `git commit` and `git push`
+5. Append summary to PHASE_LOG.md
+
