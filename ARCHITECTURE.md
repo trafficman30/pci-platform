@@ -296,13 +296,18 @@ All IPC messages are newline-terminated JSON. Every message carries `"v":1`.
 
 ```json
 {"v":1,"t":"snap","ts":1234.5, ...full snapshot fields... }
+{"v":1,"t":"io_change","ts":1234.5,"detectors":[...],"kernel_deton":[...],"confirms":[...],"forces":[...],"specials":[...],"crb":bool,"sync":0|1,"hi":0|1,"to":0|1,"mova_fault":0|1}
 {"v":1,"t":"phase_change","ts":1234.5,"from":2,"to":4}
 {"v":1,"t":"fault","ts":1234.5,"error_id":5,"data":0}
 {"v":1,"t":"stage_forced","ts":1234.5,"stage":3}
 {"v":1,"t":"msg","ts":1234.5,"type":1,"sub":1,"desc":"...","seq":42}
 ```
 
-Snapshot rate: 1-2Hz.
+Snapshot rate: 1Hz (20 × 50ms poll cycles).
+IO-change events: pushed at 50ms resolution whenever any IO bit changes.
+  Covers: detectors, kernel_deton, confirms, forces, specials, crb,
+  sync, hi, to, mova_fault. Ensures 150ms detector pulses are always
+  caught (worst case 50ms latency vs 1Hz snap latency).
 Events (phase change, fault, stage force): immediate on occurrence.
 Do NOT push a full snapshot every 100ms tick — this was a previous design
 error that caused GIL contention and memory growth.
@@ -609,7 +614,7 @@ MOVA Tools (client)    →    pci.mova.kernel@N     ←→   signal table
 
 ### Web service port
 
-- Dev host: 8081 (8080 occupied by CM5 monolith)
+- Dev host: 8082 (8080 = MOVA monolith, 8081 = reserved)
 - Field CM5: 8080 (no CM5 monolith present)
 - Override: PCI_WEB_PORT environment variable
 
@@ -649,23 +654,29 @@ MOVA Tools (client)    →    pci.mova.kernel@N     ←→   signal table
 
 #### Phase 2 implementation notes
 
-**Port:** pci.web runs on :8081. Port 8080 is occupied by the CM5 monolith
-on this development host. The ARCHITECTURE port table shows :8080 as the
-intended field port — that remains correct for field deployment.
-On this dev host, override with: PCI_WEB_PORT=8081
+**Port:** pci.web runs on :8082 on this dev host. Field deployment target
+is :8080 (no CM5 monolith present). Override: PCI_WEB_PORT env var.
 
 **KernelIO.snapshot() — required method:**
 MovaStream.snapshot() calls self.io.snapshot(). KernelIO must implement
 snapshot(), reset_confirms(), and set_intergreen_matrix() to satisfy the
-AbstractIO protocol used by the MOVA runtime. Without snapshot(), the push
-loop silently catches AttributeError at DEBUG level and no snaps are sent.
-These three methods are now present in kernel_io.py.
+AbstractIO protocol used by the MOVA runtime.
+snapshot() returns: `{type, connected, sync, hi, to, mova_fault}` — the
+current last-written values from `_prev_out`. The UI reads `io.sync`,
+`io.hi`, `io.to`, `io.mova_fault` from this. Returning only
+`{type, connected}` causes all four to be permanently zero in the UI.
 
-**_PciMovaStream subclass:**
+**_PciMovaStream subclass — explicit start required:**
 kernel_main.py subclasses MovaStream as _PciMovaStream to override start().
 This prevents load_dataset() from spawning a background tick thread —
-the tick runs on the main thread via _loop() directly. The override sets
-_running and transitions status to WARMUP, matching normal start() behaviour.
+the tick runs on the main thread via _loop() directly.
+
+After dataset load, status is held at NOT_STARTED (immune to CRB transitions,
+kernel does not tick). Only when the user sends `SET_IO 19 1` (Start button)
+does the IPC server advance status to NO_CRB, which allows:
+  NO_CRB + CRB=True → WARMUP → (kernel runs warmup) → ON_CONTROL
+This prevents sim-mode auto-takeover (output_mode=MOVA_JUST_ON) immediately
+after dataset load without explicit user action.
 
 **Before writing anything in Phase 2, read:**
 /opt/pci/mova/SIGNALS.md — confirmed complete output signal list.

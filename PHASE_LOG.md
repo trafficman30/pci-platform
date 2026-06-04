@@ -1549,10 +1549,180 @@ or a state persistence issue. Clarify with Mick before changing.
 
 ---
 
-## NEXT SESSION START HERE — three log noise fixes
+## 2026-06-04 — Three log noise fixes  ✓ COMPLETE
 
-### Context
-Three log-noise issues identified in live testing. Fix all three, commit. No other changes.
+**Fix 1 — offline/service.py: opMode logged only on change**
+`UG405OpModeTracker._read_loop()` was logging `opMode = N` every 1Hz snap from
+pci.ug405 even when the value had not changed.
+Fix: change-detection added — log fires only when `ev['opmode'] != self._op_mode`.
+Assignment remains unconditional (state always updated).
+
+**Fix 2 — ug405/protocol/scoot.py: SCOOT debug log inside on_sample guard**
+`_pack_and_reset()` logged SCOOT packed bytes every 4-second sample interval
+regardless of whether data was being sent to an instation.
+Fix: `log.debug(...)` moved inside `if self.on_sample:` block — silent in
+standalone (opMode=1) and monitor (opMode=2).
+
+**Fix 3 — config/signals.cfg: virt.dim declared owned by pci.autodim**
+`pci.autodim` writes to `virt.dim` every 30s but the signal was absent from
+signals.cfg. IOBus rejected the write and logged a warning each time.
+Fix: added `virt.dim = pci.autodim` to the [signals] section.
+
+**Test results:** import check OK; `configparser` reads `virt.dim = pci.autodim` ✓
+**Commit:** e52a47a — pushed to remote.
+
+**Outstanding:**
+- Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+  Read MICKS_MOVA_TOOLS_INFO_FOR_AML/ tcpdumps, read /opt/MOVA/pci_mova/protocol/mova_tools.py,
+  build mova/protocol/aml_server.py
+
+---
+
+## 2026-06-04 — SYNC/HI/fault fix + SCOOT log correction
+
+### SYNC not pulsing in UI  ✓ FIXED
+
+**Root cause:** `KernelIO.snapshot()` returned only `{"type":"iobus","connected":...}`.
+`io.sync`, `io.hi`, `io.to`, `io.mova_fault` were always `undefined → 0` in the UI.
+
+**Three-layer fix (commit 45ca06e):**
+- `mova/kernel_io.py` — `snapshot()` now returns `sync`, `hi`, `to`, `mova_fault`
+  from `_prev_out` (the last-written value per signal — already maintained by `_w()`)
+- `mova/ipc/server.py` — `io_change` event now tracks and includes `sync`, `hi`,
+  `to`, `mova_fault` from `snap["io"]`; these are caught at 50ms alongside det/force changes
+- `web/static/index.html` — `handleIOChange()` now calls `updateIndicator()` for
+  HI/SYNC/FAULT, and uses `msg.to` directly for force bits (replaces stale `st.to` cache)
+
+### SCOOT DEBUG still logging in standalone  ✓ FIXED
+
+**Root cause:** `on_sample` is always set in `ug405/service.py` (`_on_scoot_sample`
+is unconditional), so the `if self.on_sample:` guard added in the prior session
+was still firing every 4 seconds.
+
+**Fix:**
+- `ug405/protocol/scoot.py` — `log.debug` removed from `ScootSampler` entirely
+- `ug405/service.py` — `log.debug("SCOOT %s packed=...")` added inside
+  `_on_scoot_sample`, inside the existing `if self._rbe and self.op_mode['value'] >= 2:`
+  guard — only logs when actually pushing to instation (opMode ≥ 2)
+
+**Services restarted:** pci-iobus, pci-offline, pci-ug405, pci-mova-kernel@0, pci-web
+
+**Outstanding:**
+- Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+  Read MICKS_MOVA_TOOLS_INFO_FOR_AML/ tcpdumps, read /opt/MOVA/pci_mova/protocol/mova_tools.py,
+  build mova/protocol/aml_server.py
+
+---
+
+## 2026-06-04 — Session: bug fixes and UI polish
+
+### What was done this session (in order)
+
+---
+
+#### Three log noise fixes  ✓ COMPLETE (commit e52a47a)
+
+1. `offline/service.py` — opMode logged only on value change (not every 1Hz snap)
+2. `ug405/protocol/scoot.py` — SCOOT debug moved inside `on_sample` guard; then
+   further moved to `_on_scoot_sample()` in `service.py` inside the `opMode >= 2`
+   guard (previous guard was insufficient — on_sample is always set)
+3. `config/signals.cfg` — `virt.dim = pci.autodim` added, silences write-rejected warning
+
+---
+
+#### SYNC / HI / FAULT / TO always zero in UI  ✓ FIXED (commit 45ca06e)
+
+**Root cause:** `KernelIO.snapshot()` returned only `{type, connected}`.
+`io.sync`, `io.hi`, `io.to`, `io.mova_fault` were always `undefined → 0`.
+
+**Three-layer fix:**
+- `mova/kernel_io.py` — `snapshot()` returns `sync/hi/to/mova_fault` from `_prev_out`
+- `mova/ipc/server.py` — `io_change` events now track and include sync/hi/to/mova_fault
+  from `snap["io"]`; caught at 50ms alongside detector/force changes
+- `web/static/index.html` — `handleIOChange()` now calls `updateIndicator()` for
+  HI/SYNC/FAULT; uses `msg.to` directly for force bits
+
+---
+
+#### Service status dots: single endpoint + memory bar  ✓ COMPLETE (commit 1e26d64)
+
+**Problem:** 6 serial HTTP pings with 2s timeouts — UI dots flicker, serial delay.
+
+**Fix:**
+- `web/api/routes/system.py` — `GET /api/system/status` returns `{ug405, rtig,
+  autodim, offline, agd, flir, iobus}` from IPC client `.connected` state (instant,
+  no socket round-trips); `GET /api/system/memory` from `/proc/meminfo`
+- `web/api/app.py` — all 6 IPC clients wired into `system_set_clients()` at startup
+- `web/static/index.html` — `pollServices()` replaced with single fetch to
+  `/api/system/status`; `loadMemory()` now works (was 404)
+
+---
+
+#### ON_CONTROL badge without pressing Start  ✓ FIXED (commit 66a585d)
+
+**Root cause:** `_PciMovaStream.start()` immediately set `WARMUP` when dataset
+loaded. With sim CRB=1, kernel auto-transitioned WARMUP → ON_CONTROL via
+`output_mode=MOVA_JUST_ON` without user pressing Start.
+
+**Fix:**
+- `mova/kernel_main.py` — `start()` now holds at `NOT_STARTED` after dataset load
+  (immune to CRB transitions, kernel does not tick)
+- `mova/ipc/server.py` — `SET_IO 19 1` (Start button) detected in `_dispatch()`:
+  if dataset loaded and status is NOT_STARTED, advance to NO_CRB to begin
+  normal warmup sequence. Explicit user action required.
+
+---
+
+#### MOVA log path + pci_mova DEBUG + IPC connect log level  ✓ FIXED (commit d135171)
+
+1. **MOVA log path** — `MOVA_LOG_DIR=/opt/pci/logs/mova` added to
+   `/etc/systemd/system/pci-mova-kernel@.service`. Logs now write to
+   `/opt/pci/logs/mova/` not `/opt/MOVA/pci_mova/logs/`. Verified.
+
+2. **pci_mova DEBUG suppression** — `logging.getLogger('pci_mova').setLevel(WARNING)`
+   in `kernel_main.py` after `setup()`. Dataset parser and core library noise silenced;
+   `pci.mova.*` loggers unaffected.
+
+3. **IPC connect/disconnect level** — Applied to 5 servers (mova, ug405, rtig, autodim,
+   offline): first connect → INFO, subsequent → DEBUG; last disconnect → INFO, others → DEBUG.
+
+---
+
+#### Autodim config hot-reload  ✓ COMPLETE (commit a4618a8)
+
+**Problem:** lat/lon/offset changes required service restart.
+
+**Fix:**
+- `autodim/service.py` — `reload_config()` re-reads all settings from cfg_path and
+  sets `_calc_date=None` to force immediate astral recalc on next tick
+- `autodim/ipc/server.py` — `RELOAD_CONFIG` IPC command added
+- `web/api/routes/config.py` — POST `/api/autodim_cfg` now sends `RELOAD_CONFIG`
+  instead of only `SET_ENABLED`; all changes (lat/lon/offsets/signal/enabled) take
+  effect immediately with no restart
+- `web/static/autodim.html` — "restart required" note removed
+
+---
+
+### State at session end
+
+**All 7 services running:** pci-iobus, pci-mova-kernel@0, pci-ug405 (UDP 1161),
+pci-rtig, pci-autodim, pci-offline, pci-web (TCP 8082, RTIG :9011)
+
+**MOVA logs:** `/opt/pci/logs/mova/stream_0_2026-06-04.jsonl` confirmed
+
+**Key behaviors established:**
+- Stream card shows NOT_STARTED after dataset load; Start button required
+- SYNC/HI/FAULT pulse correctly at 50ms via io_change events
+- Service status dots from single instant endpoint (no ping round-trips)
+- Autodim location/offset changes hot-reload without restart
+- Log noise: opMode, SCOOT, virt.dim, pci_mova library, IPC chatter all fixed
+
+### Outstanding
+
+- Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+  Read MICKS_MOVA_TOOLS_INFO_FOR_AML/ tcpdumps
+  Read /opt/MOVA/pci_mova/protocol/mova_tools.py
+  Build mova/protocol/aml_server.py
 
 ---
 
