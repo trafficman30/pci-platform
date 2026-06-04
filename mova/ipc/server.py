@@ -293,7 +293,18 @@ class IPCServer:
                 return {"v": 1, "t": "ack", "cmd": "SWITCH_PLAN", "ok": bool(ok)}
 
             elif cmd == 'SET_IO' and len(parts) == 3:
-                self._stream.buffers.io[int(parts[1])] = int(parts[2])
+                io_idx = int(parts[1])
+                io_val = int(parts[2])
+                self._stream.buffers.io[io_idx] = io_val
+                # io[19]=1 is the Start button — advance from NOT_STARTED to NO_CRB
+                # so _update_crb_status() can begin the warmup sequence.
+                if io_idx == 19 and io_val == 1:
+                    from pci_mova.core.model.enums import MovaStatus
+                    if (self._stream._dataset is not None and
+                            self._stream.status.current == MovaStatus.NOT_STARTED):
+                        self._stream.status.set(MovaStatus.NO_CRB)
+                        log.info("stream %d: explicit start — NO_CRB → warmup sequence begins",
+                                 self._sid)
                 return {"v": 1, "t": "ack", "cmd": "SET_IO", "ok": True}
 
             elif cmd == 'SET_DET' and len(parts) == 3:

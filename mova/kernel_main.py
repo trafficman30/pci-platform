@@ -41,10 +41,12 @@ class _PciMovaStream(MovaStream):
         if self._dataset is None:
             self.status.set(MovaStatus.NO_DATASET)
             return
-        self._running.set()
-        self.status.set(MovaStatus.WARMUP)
+        # Hold at NOT_STARTED — kernel does not tick and CRB transitions are
+        # immune until the user explicitly presses Start (SET_IO 19 1 via IPC).
+        # load_dataset() sets INIT just before calling us; override it back.
+        self.status.set(MovaStatus.NOT_STARTED)
         log = logging.getLogger('pci.mova.kernel')
-        log.info("stream %d: dataset loaded — entering warmup", self.stream_id)
+        log.info("stream %d: dataset loaded — awaiting explicit start", self.stream_id)
 
     def _loop(self) -> None:
         from pci_mova.config import TICK_SEC
