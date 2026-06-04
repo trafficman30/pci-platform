@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 
 from pci.web.api.routes.iobus    import router as iobus_router
 from pci.web.api.routes.system   import router as system_router
-from pci.web.api.routes.mova     import router as mova_router,    set_registry as mova_set_reg
+from pci.web.api.routes.mova     import (router as mova_router, streams_router,
+                                         set_registry as mova_set_reg)
 from pci.web.api.routes.dataset  import router as dataset_router, set_registry as dataset_set_reg
 from pci.web.api.routes.config   import (router as config_router,
                                          set_rtig_client    as config_set_rtig,
@@ -77,6 +78,7 @@ def create_app(registry, ug405_client=None, rtig_client=None,
     app.include_router(config_router,  prefix="/api",          tags=["Config"])
     app.include_router(iobus_router,   prefix="/api/iobus",   tags=["IOBus"])
     app.include_router(mova_router,    prefix="/api/mova",    tags=["MOVA"])
+    app.include_router(streams_router, prefix="/api/streams", tags=["Streams"])
     app.include_router(ug405_router,   prefix="/api/ug405",   tags=["UG405"])
     app.include_router(rtig_router,    prefix="/api/rtig",    tags=["RTIG"])
     app.include_router(autodim_router, prefix="/api/autodim", tags=["Autodim"])

@@ -1443,6 +1443,63 @@ This may be correct behaviour (kernel auto-starts when CRB ready and io[19]=1)
 or a state persistence issue. Clarify with Mick before changing.
 
 **Next session start order:**
-1. Add four missing WebSocket endpoints to live.py
-2. Add log REST endpoints to mova.py (read MOVA reference first)
-3. Investigate ON_CONTROL persistence
+1. ~~Add four missing WebSocket endpoints to live.py~~ ✓ DONE
+2. ~~Add log REST endpoints to mova.py~~ ✓ DONE
+3. Investigate ON_CONTROL persistence (carry forward)
+
+---
+
+## 2026-06-04 — Popup WS endpoints + log REST API
+
+### Missing WebSocket endpoints ✓ COMPLETE
+
+**Built:**
+- `web/api/ws/live.py` — `_get_client()` helper; `_pump_transform()` helper (like
+  `_pump` but applies a filter/transform function — None return = skip event).
+  Four new WebSocket endpoints:
+  - `/ws/derived/{stream_id}` — passes full snap to derived.html, satflow.html
+  - `/ws/messages/{stream_id}` — filters `{t:"msg"}` events, wraps as `{messages:[msg]}`
+    for messages.html and tma.html
+  - `/ws/tma/{stream_id}` — extracts `{tma_counts:{}, no_lanes}` from snaps for
+    tma.html (tma_counts empty until Phase 7.6 MOVA Tools integration)
+  - `/ws/errors/{stream_id}` — inline stateful handler; accumulates fault history
+    per-connection from snap.active_faults changes; pushes `{active, history}`
+    on every snap. History: new fault (key not in prev snap) → append cleared=false;
+    cleared fault (key in prev, gone from current) → mark cleared=true in history.
+    Capped at 200 entries.
+
+### Log REST API ✓ COMPLETE
+
+**Built:**
+- `mova/ipc/client.py` — `_latest_snap: dict = {}` added to `KernelClient`.
+  Updated in `_connect_and_read` on `t=="snap"` events. Exposed via `latest_snap()`.
+- `web/api/routes/mova.py` — `streams_router = APIRouter()` with 5 new endpoints:
+  - `GET /{id}` — returns `client.latest_snap()` (used by tma.html to get `no_lanes`)
+  - `GET /{id}/logs` — lists `.jsonl` + `.jsonl.gz` dates from `MOVA_LOG_DIR`
+  - `GET /{id}/log` — FileResponse for a single date (handles .gz)
+  - `GET /{id}/log/export` — multi-date gzipped download; decompresses .gz inputs
+    into a new single-stream .jsonl.gz
+  - `GET /{id}/log/slice` — filtered JSONL records; dimensions from session record
+    in log (no live stream access in web process). Handles .gz files.
+  Helper functions: `_available_dates()`, `_resolve_log()`, `_open_log()`,
+  `_read_records()`. Log directory: `MOVA_LOG_DIR` env var (default `/opt/MOVA/pci_mova/logs`).
+- `web/api/app.py` — `streams_router` imported and mounted at `/api/streams`.
+
+**Decisions:**
+- Log dir uses same `MOVA_LOG_DIR` env var as MOVA kernel (since PCI kernel is a
+  MOVA subclass using pci_mova.config.LOG_DIR). If the systemd unit needs a different
+  path, set `MOVA_LOG_DIR=/opt/pci/logs/mova` in the service unit and logs will follow.
+- Dimensions in `log/slice` parsed from session records only (no live kernel access
+  from web process). This is correct for historical review.
+- `/ws/tma/{id}` returns empty `tma_counts` — tma_counts come from MOVA Tools
+  (Phase 7.6). tma.html renders an empty count grid gracefully.
+
+**Test results:**
+- All imports clean.
+- `_available_dates(0)` → 8 dates in `/opt/MOVA/pci_mova/logs/` ✓
+- `_read_records(...)` for 2026-06-04 → 4103 records, session dims found ✓
+- WebSocket endpoints: all 12 registered (8 existing + 4 new) ✓
+
+**Outstanding:**
+- Investigate ON_CONTROL persistence (state_0.json carries io[19]=1 between sessions)
+- Phase 7.6: MOVA Tools AML connection (gate for Phase 8)

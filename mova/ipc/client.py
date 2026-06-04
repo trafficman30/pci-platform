@@ -31,14 +31,19 @@ class KernelClient:
     """
 
     def __init__(self, stream_id):
-        self._sid      = stream_id
-        self._subs     = []
-        self._sub_lock = threading.Lock()
-        self.connected = False
+        self._sid         = stream_id
+        self._subs        = []
+        self._sub_lock    = threading.Lock()
+        self.connected    = False
+        self._latest_snap = {}
         threading.Thread(
             target=self._read_loop, daemon=True,
             name=f'kernel-client-{stream_id}',
         ).start()
+
+    def latest_snap(self) -> dict:
+        """Return the most recently received snap event, or {} if none yet."""
+        return self._latest_snap
 
     def subscribe(self):
         """Return a Queue that will receive event dicts from the push socket."""
@@ -97,6 +102,8 @@ class KernelClient:
                 ev = json.loads(line)
             except Exception:
                 continue
+            if ev.get('t') == 'snap':
+                self._latest_snap = ev
             with self._sub_lock:
                 dead = []
                 for q in list(self._subs):
