@@ -89,8 +89,9 @@ class UG405OpModeTracker:
                 ev = json.loads(line)
                 if 'opmode' in ev:
                     with self._lock:
+                        if ev['opmode'] != self._op_mode:
+                            log.info("opMode → %d", ev['opmode'])
                         self._op_mode = ev['opmode']
-                    log.info("opMode = %d", ev['opmode'])
             except Exception:
                 pass
         with self._lock:
