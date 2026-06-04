@@ -463,12 +463,11 @@ async def post_autodim_cfg(request: Request):
             'signal':                signal,
         })
 
-        if enabled_changed and _autodim_client is not None:
+        # Hot-reload all settings (lat/lon/offsets/enabled) via RELOAD_CONFIG.
+        # No service restart needed for any autodim config change.
+        if _autodim_client is not None:
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None, _autodim_client.send_command,
-                f"SET_ENABLED {1 if enabled else 0}"
-            )
+            await loop.run_in_executor(None, _autodim_client.send_command, "RELOAD_CONFIG")
 
         log.info("autodim.cfg updated via web UI — lat=%.4f lon=%.4f dim%+d bright%+d",
                  lat, lon, dim_offset, bright_offset)

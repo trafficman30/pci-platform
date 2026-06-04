@@ -35,8 +35,9 @@ _TICK_INTERVAL = 30.0
 
 
 class AutodimService:
-    def __init__(self, iobus, cfg):
+    def __init__(self, iobus, cfg, cfg_path=None):
         self._iobus         = iobus
+        self._cfg_path      = cfg_path
         self._lat           = cfg.getfloat('autodim', 'lat')
         self._lon           = cfg.getfloat('autodim', 'lon')
         self._dim_offset    = cfg.getint('autodim', 'dim_offset_minutes',    fallback=0)
@@ -59,6 +60,22 @@ class AutodimService:
         with self._lock:
             self._enabled = bool(enabled)
         log.info("enabled = %s", enabled)
+
+    def reload_config(self):
+        if not self._cfg_path:
+            raise RuntimeError("cfg_path not set")
+        cfg = configparser.ConfigParser()
+        cfg.read(self._cfg_path)
+        with self._lock:
+            self._lat           = cfg.getfloat('autodim', 'lat')
+            self._lon           = cfg.getfloat('autodim', 'lon')
+            self._dim_offset    = cfg.getint('autodim', 'dim_offset_minutes',    fallback=0)
+            self._bright_offset = cfg.getint('autodim', 'bright_offset_minutes', fallback=0)
+            self._signal        = cfg.get('autodim', 'signal')
+            self._enabled       = cfg.getboolean('autodim', 'enabled', fallback=True)
+            self._calc_date     = None  # force recalc on next tick
+        log.info("config reloaded: lat=%.4f lon=%.4f dim_offset=%d bright_offset=%d",
+                 self._lat, self._lon, self._dim_offset, self._bright_offset)
 
     def snapshot(self):
         with self._lock:
@@ -168,11 +185,12 @@ def main():
     cfg.read(cfg_path)
 
     iobus = AutodimIOBus()
-    svc   = AutodimService(iobus, cfg)
+    svc   = AutodimService(iobus, cfg, cfg_path=cfg_path)
 
     ipc = IPCServer()
     ipc.set_snapshot_callback(svc.snapshot)
     ipc.set_enabled_callback(svc.set_enabled)
+    ipc.set_reload_callback(svc.reload_config)
     ipc.start()
 
     stop = threading.Event()

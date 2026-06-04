@@ -39,12 +39,16 @@ class IPCServer:
         self._event_q    = queue.Queue()
         self._snap_cb    = None   # () → dict
         self._enabled_cb = None   # (bool) → None
+        self._reload_cb  = None   # () → None
 
     def set_snapshot_callback(self, cb):
         self._snap_cb = cb
 
     def set_enabled_callback(self, cb):
         self._enabled_cb = cb
+
+    def set_reload_callback(self, cb):
+        self._reload_cb = cb
 
     def push_event(self, ev):
         self._event_q.put(ev)
@@ -172,5 +176,14 @@ class IPCServer:
                 return {'v': 1, 't': 'ack', 'cmd': 'SET_ENABLED', 'ok': True}
             except Exception as e:
                 return {'v': 1, 't': 'ack', 'cmd': 'SET_ENABLED', 'ok': False, 'error': str(e)}
+
+        if cmd == 'RELOAD_CONFIG':
+            if self._reload_cb is None:
+                return {'v': 1, 't': 'err', 'msg': 'no reload handler'}
+            try:
+                self._reload_cb()
+                return {'v': 1, 't': 'ack', 'cmd': 'RELOAD_CONFIG', 'ok': True}
+            except Exception as e:
+                return {'v': 1, 't': 'ack', 'cmd': 'RELOAD_CONFIG', 'ok': False, 'error': str(e)}
 
         return {'v': 1, 't': 'err', 'msg': f'unknown: {cmd}'}
