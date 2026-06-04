@@ -161,7 +161,7 @@ async function discoverStreams() {
 function openStreamWS(id) {
   addNavStream(id);
   const ws = new WebSocket(`ws://${location.host}/ws/mova/${id}`);
-  _streams[id] = {ws, live: false};
+  _streams[id] = {ws, live: false, dataset: null, to: 0};
 
   ws.onopen = () => setStreamNavState(id, 'connecting');
 
@@ -169,6 +169,7 @@ function openStreamWS(id) {
     try {
       const msg = JSON.parse(e.data);
       if (msg.t === 'ping') return;
+      if (msg.t === 'io_change') { handleIOChange(id, msg); return; }
       if (msg.t !== 'snap') return;
 
       ge('no-streams-msg', el => el.style.display = 'none');
@@ -176,6 +177,8 @@ function openStreamWS(id) {
       let card = document.getElementById(`card-${id}`);
       if (!card) { card = buildCard(id); grid.appendChild(card); }
       updateCard(id, msg);
+      _streams[id].dataset = msg.dataset || null;
+      _streams[id].to      = (msg.io || {}).to || 0;
 
       _tickFlip = !_tickFlip;
       ge('footer-tick', el => el.style.opacity = _tickFlip ? '1' : '0.3');
@@ -510,6 +513,28 @@ function updateCard(id, s) {
 
   // Simulation panel (shown when kernel reports simulated IO mode)
   updateSimPanel(id, s);
+}
+
+// ── Immediate IO-change events ────────────────────────────────────────────────
+function handleIOChange(id, msg) {
+  const st   = _streams[id] || {};
+  const dets = st.dataset ? (msg.kernel_deton || []) : (msg.detectors || []);
+
+  updateBitGrid(`dets-${id}`,   dets,               4);
+  updateBitGrid(`confs-${id}`,  msg.confirms || [],  4);
+  updateForceBits(`forces-${id}`, msg.forces || [], st.to || 0);
+  updateSpecialOutputs(`special-${id}`, msg.specials || []);
+
+  const crb = !!msg.crb;
+  ge(`crb-${id}`,     e => e.className = `crb-light${crb ? ' on' : ''}`);
+  ge(`crb-val-${id}`, e => { e.lastChild.textContent = crb ? 'READY' : 'NOT READY'; e.className = `status-val ${crb ? 'on' : 'off'}`; });
+
+  // Keep sim state current so toggle commands operate on the right value
+  if (_simState[id]) {
+    _simState[id].crb  = crb;
+    _simState[id].dets = [...(msg.detectors || [])];
+  }
+  ge(`sim-crb-${id}`, e => { e.textContent = crb ? 'ON' : 'OFF'; e.className = `sim-btn${crb ? ' crb-active' : ''}`; });
 }
 
 // ── Bit grid helpers ──────────────────────────────────────────────────────────

@@ -17,8 +17,8 @@ import time
 
 log = logging.getLogger('pci.mova.ipc')
 
-_SNAP_TICKS  = 5    # push snap every 5 × 200ms = 1s
-_POLL_SLEEP  = 0.2  # 200ms push loop poll
+_SNAP_TICKS  = 20   # push snap every 20 × 50ms = 1s
+_POLL_SLEEP  = 0.05 # 50ms — catches 150ms+ detector pulses in at least one cycle
 
 
 def _sock_path(stream_id, kind):
@@ -117,6 +117,14 @@ class IPCServer:
         last_stage  = None
         last_seq    = 0
 
+        # IO-change shadow — None on first loop so we set baseline without pushing
+        prev_dets     = None
+        prev_kdeton   = None
+        prev_confs    = None
+        prev_forces   = None
+        prev_specials = None
+        prev_crb      = None
+
         while True:
             time.sleep(_POLL_SLEEP)
 
@@ -152,6 +160,41 @@ class IPCServer:
                       "from": last_stage, "to": cur_stage}
                 self._push_to_all((json.dumps(ev) + '\n').encode())
             last_stage = cur_stage
+
+            # IO-change detection — push immediately when bit arrays change
+            buf          = snap.get("buffers", {})
+            cur_dets     = buf.get("detectors",      [])
+            cur_kdeton   = buf.get("kernel_deton",    [])
+            cur_confs    = buf.get("confirms",        [])
+            cur_forces   = buf.get("forces",          [])
+            cur_specials = buf.get("special_outputs", [])
+            cur_crb      = buf.get("crb",             False)
+
+            if prev_dets is not None and (
+                cur_dets     != prev_dets     or
+                cur_kdeton   != prev_kdeton   or
+                cur_confs    != prev_confs    or
+                cur_forces   != prev_forces   or
+                cur_specials != prev_specials or
+                cur_crb      != prev_crb
+            ):
+                io_ev = {
+                    "v": 1, "t": "io_change", "ts": time.time(),
+                    "detectors":    cur_dets,
+                    "kernel_deton": cur_kdeton,
+                    "confirms":     cur_confs,
+                    "forces":       cur_forces,
+                    "specials":     cur_specials,
+                    "crb":          cur_crb,
+                }
+                self._push_to_all((json.dumps(io_ev, default=str) + '\n').encode())
+
+            prev_dets     = cur_dets
+            prev_kdeton   = cur_kdeton
+            prev_confs    = cur_confs
+            prev_forces   = cur_forces
+            prev_specials = cur_specials
+            prev_crb      = cur_crb
 
             # Snapshot at 1Hz
             snap_ctr += 1
