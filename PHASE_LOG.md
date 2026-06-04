@@ -1326,3 +1326,36 @@ wired to config module via `config_set_rtig()`/`config_set_autodim()`.
   Read MICKS_MOVA_TOOLS_INFO_FOR_AML/ tcpdumps, read /opt/MOVA/pci_mova/protocol/mova_tools.py,
   build mova/protocol/aml_server.py
 
+
+---
+
+## 2026-06-04 — Pre-7.6 fixes: tick overrun, async log, visibilitychange
+
+### Three fixes before Phase 7.6
+
+**Fix 1 — index.html visibilitychange listener: ALREADY PRESENT**
+The `document.addEventListener('visibilitychange', ...)` listener that re-polls
+service status on tab focus was already added in the WebSocket fix session
+(lines 811–814 of index.html). No change needed.
+
+**Fix 2 — system.py: pci.log read moved to run_in_executor  ✓ FIXED**
+`GET /api/system/log` read pci.log synchronously inside an `async def` handler.
+On a large log file this blocks the asyncio event loop, stalling SSE keepalives
+and other concurrent requests.
+Fix: extracted `_read_log_sync()` and called via `loop.run_in_executor(None, ...)`.
+Import check passed.
+
+**Fix 3 — kernel_main.py: tick overrun rate-limiting  ✓ ADDED**
+The upstream `MovaStream._loop()` logs `DEBUG` on every overrun tick with no
+rate limiting. The ARCHITECTURE.md requires WARNING-level rate-limited logging:
+one WARNING on first overrun, suppressed during the storm, one WARNING on
+recovery with count and peak duration. This pattern was not present in kernel_main.py.
+Fix: `_PciMovaStream._loop()` override added. Mirrors upstream crash-handling
+logic exactly; replaces the sleep/overrun branch with the ARCHITECTURE.md
+rate-limit state machine (`_in_overrun`, `_overrun_count`, `_overrun_peak`).
+Import check passed.
+
+**Commit:** 1405c88 — pushed to remote.
+
+**Outstanding:**
+- Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
