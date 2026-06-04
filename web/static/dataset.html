@@ -300,11 +300,18 @@ async function loadDsList() {
     _currentFilename = snap?.dataset?.filename || null;
   } catch(_) {}
 
+  // Fetch running stream IDs to populate the Load panel stream selector
+  let ctrlStreams = [];
+  try {
+    const sj = await fetch(`${API}/api/mova/streams`).then(r => r.ok ? r.json() : {streams: []});
+    ctrlStreams = (sj.streams || []).map(id => ({stream_id: id}));
+  } catch(_) {}
+
   const listEl = document.getElementById('ds-list');
   try {
     const r = await fetch(`${API}/api/dataset/`);
     const j = await r.json();
-    const names = j.datasets || [];
+    const names = Array.isArray(j) ? j.map(e => e.name) : [];
 
     if (!names.length) {
       listEl.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:8px 0">No datasets uploaded yet.</div>';
@@ -312,21 +319,8 @@ async function loadDsList() {
     }
 
     listEl.innerHTML = '';
-    const items = names.map(name => {
-      const item = buildDsItem(name, null);
-      listEl.appendChild(item);
-      return item;
-    });
-
-    names.forEach((name, idx) => {
-      fetch(`${API}/api/dataset/info/${encodeURIComponent(name)}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(info => {
-          if (!info) { items[idx]._updateInfo([]); return; }
-          const ctrlStreams = Object.values(info.streams || {});
-          items[idx]._updateInfo(ctrlStreams);
-        })
-        .catch(() => items[idx]._updateInfo([]));
+    names.forEach(name => {
+      listEl.appendChild(buildDsItem(name, ctrlStreams));
     });
 
   } catch(e) {
