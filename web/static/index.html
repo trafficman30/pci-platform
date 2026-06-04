@@ -234,22 +234,11 @@ function setStreamNavState(id, state) {
 }
 
 // ── Service status polling ────────────────────────────────────────────────────
-const _SVC_PINGS = [
-  {id:'ug405',   url:'/api/ug405/ping'},
-  {id:'rtig',    url:'/api/rtig/ping'},
-  {id:'autodim', url:'/api/autodim/ping'},
-  {id:'offline', url:'/api/offline/ping'},
-  {id:'agd',     url:'/api/agd/ping'},
-  {id:'flir',    url:'/api/flir/ping'},
-];
-
 async function pollServices() {
-  for (const svc of _SVC_PINGS) {
-    try {
-      const r = await fetch(svc.url, {signal: AbortSignal.timeout(2000)});
-      setServiceDot(svc.id, r.ok);
-    } catch { setServiceDot(svc.id, false); }
-  }
+  try {
+    const j = await fetch('/api/system/status', {signal: AbortSignal.timeout(2000)}).then(r => r.json());
+    for (const [id, alive] of Object.entries(j)) setServiceDot(id, alive);
+  } catch(_) {}
 }
 
 function setServiceDot(id, alive) {

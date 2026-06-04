@@ -10,6 +10,11 @@ from fastapi import APIRouter, Query
 log    = logging.getLogger('pci.web.system')
 router = APIRouter()
 
+_clients: dict = {}   # name → IPC client object with .connected property
+
+def set_clients(**kwargs):
+    _clients.update(kwargs)
+
 _LOG_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'logs')
 _PCI_LOG = os.path.join(_LOG_DIR, 'pci.log')
 
@@ -41,3 +46,40 @@ async def get_log(lines: int = Query(default=200, ge=1, le=5000),
 
     total = len(all_lines)
     return {"lines": all_lines[-lines:], "total": total}
+
+
+@router.get("/status")
+async def get_status():
+    """
+    Return IPC connection state for every registered service client.
+    Answered from in-process state — no socket round-trips.
+    Also includes 'iobus' based on whether the live socket file exists.
+    """
+    result = {name: bool(getattr(client, 'connected', False))
+              for name, client in _clients.items()}
+    result['iobus'] = os.path.exists('/tmp/pci.iobus.live.sock')
+    return result
+
+
+def _read_meminfo():
+    info = {}
+    with open('/proc/meminfo') as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) >= 2:
+                info[parts[0].rstrip(':')] = int(parts[1]) * 1024  # kB → bytes
+    total = info.get('MemTotal',     0)
+    avail = info.get('MemAvailable', 0)
+    used  = total - avail
+    pct   = round(used / total * 100, 1) if total else 0
+    return {'current_bytes': used, 'max_bytes': total, 'percent': pct}
+
+
+@router.get("/memory")
+async def get_memory():
+    """System RAM: used / total / percent."""
+    loop = asyncio.get_running_loop()
+    try:
+        return await loop.run_in_executor(None, _read_meminfo)
+    except OSError as e:
+        return {'current_bytes': None, 'max_bytes': None, 'percent': 0, 'error': str(e)}

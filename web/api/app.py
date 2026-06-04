@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from pci.web.api.routes.iobus    import router as iobus_router
-from pci.web.api.routes.system   import router as system_router
+from pci.web.api.routes.system   import router as system_router, set_clients as system_set_clients
 from pci.web.api.routes.mova     import (router as mova_router, streams_router,
                                          set_registry as mova_set_reg)
 from pci.web.api.routes.dataset  import router as dataset_router, set_registry as dataset_set_reg
@@ -42,6 +42,14 @@ def create_app(registry, ug405_client=None, rtig_client=None,
     mova_set_reg(registry)
     sse_set_reg(registry)
     dataset_set_reg(registry)
+    system_set_clients(
+        ug405   = ug405_client,
+        rtig    = rtig_client,
+        autodim = autodim_client,
+        offline = offline_client,
+        agd     = agd_client,
+        flir    = flir_client,
+    )
     if ug405_client is not None:
         ug405_set_client(ug405_client)
         sse_set_ug405(ug405_client)
