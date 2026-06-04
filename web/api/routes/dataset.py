@@ -170,38 +170,55 @@ async def dataset_info(name: str):
 @router.get("/detail/{stream}")
 async def dataset_detail(stream: int):
     """
-    Return dataset name and plan info from the running kernel's live snap.
-    Subscribes to the push socket and waits up to 3s for a snap message.
+    Return full parsed dataset detail for the Dataset Viewer popup.
+    Gets filename + stream_id_str from the live kernel snap, then calls
+    parse_full_detail() on the .mxds file — same data shape as MOVA.
     """
+    import sys
+    if '/opt/MOVA' not in sys.path:
+        sys.path.insert(0, '/opt/MOVA')
+
     if _registry is None:
         raise HTTPException(503, "registry not initialised")
     client = _registry.get(stream)
     if client is None:
         raise HTTPException(404, f"stream {stream} not configured")
 
+    # Get dataset filename and ControllerStream ID from the live snap
     q = client.subscribe()
+    snap_ds = None
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         deadline = time.monotonic() + 3.0
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
-            timeout = min(remaining, 1.0)
             try:
                 ev = await loop.run_in_executor(
-                    None, lambda t=timeout: q.get(block=True, timeout=t)
+                    None, lambda t=min(remaining, 1.0): q.get(block=True, timeout=t)
                 )
                 if ev.get("t") == "snap":
-                    return {
-                        "stream":      stream,
-                        "dataset":     ev.get("dataset"),
-                        "active_plan": ev.get("active_plan"),
-                        "tod_plan":    ev.get("tod_plan"),
-                        "status":      ev.get("status"),
-                    }
+                    snap_ds = ev.get("dataset")
+                    break
             except queue.Empty:
                 continue
-        raise HTTPException(504, f"stream {stream} did not send a snap within 3s")
     finally:
         client.unsubscribe(q)
+
+    if not snap_ds or not snap_ds.get("filename"):
+        raise HTTPException(404, "No dataset loaded on this stream")
+
+    filename  = snap_ds["filename"]
+    id_str    = snap_ds.get("stream_id_str", "")
+    path      = os.path.join(DATASETS_DIR, os.path.basename(filename))
+    if not os.path.exists(path):
+        raise HTTPException(404, f"Dataset file not found: {filename}")
+
+    from pci_mova.dataset.parser import parse_full_detail
+    try:
+        detail = await loop.run_in_executor(None, parse_full_detail, path, id_str)
+    except Exception as exc:
+        raise HTTPException(422, f"Dataset parse error: {exc}")
+
+    return detail
