@@ -130,8 +130,12 @@ class KernelIO:
     def snapshot(self):
         """Return IO state for MovaStream.snapshot() — iobus-backed values."""
         return {
-            "type":     "iobus",
+            "type":      "iobus",
             "connected": self._client.connected,
+            "sync":      self._prev_out.get(self._sync,       0),
+            "hi":        self._prev_out.get(self._hi,         0),
+            "to":        self._prev_out.get(self._to,         0),
+            "mova_fault":self._prev_out.get(self._mova_fault, 0),
         }
 
     def reset_confirms(self, stagon):

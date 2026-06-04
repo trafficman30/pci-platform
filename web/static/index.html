@@ -522,8 +522,15 @@ function handleIOChange(id, msg) {
 
   updateBitGrid(`dets-${id}`,   dets,               4);
   updateBitGrid(`confs-${id}`,  msg.confirms || [],  4);
-  updateForceBits(`forces-${id}`, msg.forces || [], st.to || 0);
+  updateForceBits(`forces-${id}`, msg.forces || [], msg.to || 0);
   updateSpecialOutputs(`special-${id}`, msg.specials || []);
+
+  updateIndicator(`hi-${id}`,    msg.hi         || 0, 'hi-on');
+  updateIndicator(`sync-${id}`,  msg.sync       || 0, 'sync-on');
+  updateIndicator(`fault-${id}`, msg.mova_fault || 0, 'fault-on');
+
+  // Cache to so force bits stay correct on next io_change
+  if (st) st.to = msg.to || 0;
 
   const crb = !!msg.crb;
   ge(`crb-${id}`,     e => e.className = `crb-light${crb ? ' on' : ''}`);

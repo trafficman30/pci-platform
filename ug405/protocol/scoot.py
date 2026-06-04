@@ -107,7 +107,6 @@ class ScootSampler:
                 packed = self._pack_nibbles(counts, total_ticks)
                 self._packed[scn] = packed
                 if self.on_sample:
-                    log.debug("SCOOT %s packed=%s", scn, packed.hex())
                     self.on_sample(scn, packed)
             for scn in self._sample_counts:
                 self._sample_counts[scn] = [0] * len(self._sample_counts[scn])

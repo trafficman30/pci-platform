@@ -124,6 +124,10 @@ class IPCServer:
         prev_forces   = None
         prev_specials = None
         prev_crb      = None
+        prev_sync     = None
+        prev_hi       = None
+        prev_to       = None
+        prev_fault    = None
 
         while True:
             time.sleep(_POLL_SLEEP)
@@ -163,12 +167,17 @@ class IPCServer:
 
             # IO-change detection — push immediately when bit arrays change
             buf          = snap.get("buffers", {})
+            io_snap      = snap.get("io",      {})
             cur_dets     = buf.get("detectors",      [])
             cur_kdeton   = buf.get("kernel_deton",    [])
             cur_confs    = buf.get("confirms",        [])
             cur_forces   = buf.get("forces",          [])
             cur_specials = buf.get("special_outputs", [])
             cur_crb      = buf.get("crb",             False)
+            cur_sync     = io_snap.get("sync",        0)
+            cur_hi       = io_snap.get("hi",          0)
+            cur_to       = io_snap.get("to",          0)
+            cur_fault    = io_snap.get("mova_fault",  0)
 
             if prev_dets is not None and (
                 cur_dets     != prev_dets     or
@@ -176,7 +185,11 @@ class IPCServer:
                 cur_confs    != prev_confs    or
                 cur_forces   != prev_forces   or
                 cur_specials != prev_specials or
-                cur_crb      != prev_crb
+                cur_crb      != prev_crb      or
+                cur_sync     != prev_sync     or
+                cur_hi       != prev_hi       or
+                cur_to       != prev_to       or
+                cur_fault    != prev_fault
             ):
                 io_ev = {
                     "v": 1, "t": "io_change", "ts": time.time(),
@@ -186,6 +199,10 @@ class IPCServer:
                     "forces":       cur_forces,
                     "specials":     cur_specials,
                     "crb":          cur_crb,
+                    "sync":         cur_sync,
+                    "hi":           cur_hi,
+                    "to":           cur_to,
+                    "mova_fault":   cur_fault,
                 }
                 self._push_to_all((json.dumps(io_ev, default=str) + '\n').encode())
 
@@ -195,6 +212,10 @@ class IPCServer:
             prev_forces   = cur_forces
             prev_specials = cur_specials
             prev_crb      = cur_crb
+            prev_sync     = cur_sync
+            prev_hi       = cur_hi
+            prev_to       = cur_to
+            prev_fault    = cur_fault
 
             # Snapshot at 1Hz
             snap_ctr += 1

@@ -147,6 +147,7 @@ class UG405Service:
 
         def _on_scoot_sample(scn, packed):
             if self._rbe and self.op_mode['value'] >= 2:
+                log.debug("SCOOT %s packed=%s", scn, packed.hex())
                 self._rbe.push_scoot(scn, packed, change_only=_scoot_change_only)
 
         self._scoot = ScootSampler(io, cfg, self.live, on_sample=_on_scoot_sample)
