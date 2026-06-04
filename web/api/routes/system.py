@@ -1,6 +1,7 @@
 # web/api/routes/system.py
 # System utility routes.
 
+import asyncio
 import os
 import logging
 
@@ -13,6 +14,11 @@ _LOG_DIR = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'logs')
 _PCI_LOG = os.path.join(_LOG_DIR, 'pci.log')
 
 
+def _read_log_sync():
+    with open(_PCI_LOG, encoding='utf-8', errors='replace') as f:
+        return [l.rstrip('\n') for l in f if l.strip()]
+
+
 @router.get("/log")
 async def get_log(lines: int = Query(default=200, ge=1, le=5000),
                   level: str = Query(default="")):
@@ -21,9 +27,9 @@ async def get_log(lines: int = Query(default=200, ge=1, le=5000),
     Response: {"lines": [...], "total": N}
     level — exact match filter (DEBUG / INFO / WARNING / ERROR); empty = all.
     """
+    loop = asyncio.get_running_loop()
     try:
-        with open(_PCI_LOG, encoding='utf-8', errors='replace') as f:
-            all_lines = [l.rstrip('\n') for l in f if l.strip()]
+        all_lines = await loop.run_in_executor(None, _read_log_sync)
     except FileNotFoundError:
         return {"lines": [], "total": 0, "error": "pci.log not found"}
     except OSError as e:

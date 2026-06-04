@@ -46,6 +46,52 @@ class _PciMovaStream(MovaStream):
         log = logging.getLogger('pci.mova.kernel')
         log.info("stream %d: dataset loaded — entering warmup", self.stream_id)
 
+    def _loop(self) -> None:
+        from pci_mova.config import TICK_SEC
+        _log = logging.getLogger('pci.mova.kernel')
+        _in_overrun    = False
+        _overrun_count = 0
+        _overrun_peak  = 0.0
+
+        next_tick = time.perf_counter()
+        self._crash_count = 0
+
+        while self._running.is_set():
+            next_tick += TICK_SEC
+            try:
+                self._tick()
+                self._crash_count = 0
+            except Exception as exc:
+                self._crash_count += 1
+                _log.exception("stream %d: tick exception %d/%d: %s",
+                               self.stream_id, self._crash_count, self._CRASH_LIMIT, exc)
+                if self._crash_count >= self._CRASH_LIMIT:
+                    _log.error("stream %d: %d consecutive failures — stopped (FAILED_RESTART). "
+                               "Dataset retained; use Reset to clear.",
+                               self.stream_id, self._CRASH_LIMIT)
+                    self.status.set(MovaStatus.FAILED_RESTART)
+                    self._running.clear()
+                    break
+
+            sleep = next_tick - time.perf_counter()
+            overrun = sleep <= 0
+            if overrun:
+                elapsed_ms = -sleep * 1000
+                if not _in_overrun:
+                    _log.warning("tick overrun %.0fms", elapsed_ms)
+                    _in_overrun    = True
+                    _overrun_count = 1
+                    _overrun_peak  = elapsed_ms
+                else:
+                    _overrun_count += 1
+                    _overrun_peak   = max(_overrun_peak, elapsed_ms)
+            else:
+                if _in_overrun:
+                    _log.warning("tick overrun cleared after %d ticks, peak %.0fms",
+                                 _overrun_count, _overrun_peak)
+                    _in_overrun = False
+                time.sleep(sleep)
+
 
 def _load_dataset(path):
     """Load and return a MovaDataset from path, or None on error."""
