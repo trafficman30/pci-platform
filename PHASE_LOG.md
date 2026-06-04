@@ -1503,3 +1503,46 @@ or a state persistence issue. Clarify with Mick before changing.
 **Outstanding:**
 - Investigate ON_CONTROL persistence (state_0.json carries io[19]=1 between sessions)
 - Phase 7.6: MOVA Tools AML connection (gate for Phase 8)
+
+---
+
+## 2026-06-04 — io_change: immediate bit-grid updates at 50ms
+
+### Task — push IO changes as immediate events, not waiting for 1Hz snap
+
+**`mova/ipc/server.py`:**
+- `_POLL_SLEEP` 0.2 → 0.05 (200ms → 50ms)
+- `_SNAP_TICKS` 5 → 20 (1Hz snap rate unchanged: 20 × 50ms = 1s)
+- Added IO-change shadow state to `_push_loop()`: `prev_dets`, `prev_kdeton`,
+  `prev_confs`, `prev_forces`, `prev_specials`, `prev_crb` — all init to `None`
+  so the first loop sets the baseline without pushing a spurious event.
+- On each 50ms cycle: reads buffers from snap, compares all six arrays/values
+  element-by-element. If any change → pushes `{"v":1,"t":"io_change","ts":...,
+  "detectors":[...],"kernel_deton":[...],"confirms":[...],"forces":[...],
+  "specials":[...],"crb":bool}` immediately.
+- 1Hz full snapshot unchanged — remains the full-state sync.
+
+**`web/static/index.html`:**
+- `_streams[id]` init extended: `{ws, live:false, dataset:null, to:0}`.
+  `dataset` and `to` cached from each snap for use in io_change handler.
+- `ws.onmessage`: added `io_change` intercept before the snap filter.
+- Added `handleIOChange(id, msg)` function: updates all six bit grids
+  (dets, confs, forces, specials, CRB indicators) immediately without
+  waiting for the next 1Hz snap. Uses `st.dataset` to pick `kernel_deton`
+  vs `detectors` for the detector grid. Uses `st.to` for the force TO dot.
+  Also keeps `_simState[id]` (crb + dets) in sync so sim panel toggles
+  continue to operate on current values.
+
+**Decisions:**
+- 50ms chosen so any ≥150ms detector pulse is caught on at least one cycle.
+  Worst case: detector pulse arrives just after a poll → seen on next poll
+  at most 50ms later. 1/3 of the pulse duration headroom.
+- `kernel_deton` included in the event even though not in the original spec —
+  required because the detector grid shows `kernel_deton` when a dataset is
+  loaded. Without it, detector transitions would still lag 1Hz when running.
+- Sim det buttons not updated from io_change (they update from 1Hz snap).
+  Updating 64 buttons at 20Hz would be unnecessary DOM churn.
+
+**Test results:**
+- Import check: `_POLL_SLEEP=0.05  _SNAP_TICKS=20  → snap every 1.0s` ✓
+- All JS changes at expected lines in index.html ✓
