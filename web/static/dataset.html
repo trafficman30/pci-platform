@@ -300,13 +300,6 @@ async function loadDsList() {
     _currentFilename = snap?.dataset?.filename || null;
   } catch(_) {}
 
-  // Fetch running stream IDs to populate the Load panel stream selector
-  let ctrlStreams = [];
-  try {
-    const sj = await fetch(`${API}/api/mova/streams`).then(r => r.ok ? r.json() : {streams: []});
-    ctrlStreams = (sj.streams || []).map(id => ({stream_id: id}));
-  } catch(_) {}
-
   const listEl = document.getElementById('ds-list');
   try {
     const r = await fetch(`${API}/api/dataset/`);
@@ -319,8 +312,22 @@ async function loadDsList() {
     }
 
     listEl.innerHTML = '';
-    names.forEach(name => {
-      listEl.appendChild(buildDsItem(name, ctrlStreams));
+    const items = names.map(name => {
+      const item = buildDsItem(name, null);
+      listEl.appendChild(item);
+      return item;
+    });
+
+    // Load ControllerStream info from each file in the background
+    names.forEach((name, idx) => {
+      fetch(`${API}/api/dataset/info/${encodeURIComponent(name)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(info => {
+          if (!info) { items[idx]._updateInfo([]); return; }
+          const ctrlStreams = Object.values(info.streams || {});
+          items[idx]._updateInfo(ctrlStreams);
+        })
+        .catch(() => items[idx]._updateInfo([]));
     });
 
   } catch(e) {

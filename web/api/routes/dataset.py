@@ -102,46 +102,68 @@ async def delete_dataset(filename: str):
 async def load_dataset(
     stream: int,
     filename: str = Query(...),
-    stream_id: int = Query(None),
+    stream_id: str = Query(None),
 ):
     """
     Load a .mxds file into a running kernel stream.
     IPC command: LOAD /full/path/to/file.mxds
+    stream_id — ControllerStream <ID> within the file (ignored by IPC for now;
+    reserved for future multi-stream LOAD support).
     """
     if _registry is None:
         raise HTTPException(503, "registry not initialised")
 
-    target = stream_id if stream_id is not None else stream
-    client = _registry.get(target)
+    client = _registry.get(stream)
     if client is None:
-        raise HTTPException(404, f"stream {target} not configured")
+        raise HTTPException(404, f"stream {stream} not configured")
 
     path = _ds_path(filename)
     if not os.path.exists(path):
         raise HTTPException(404, f"{filename} not found in datasets directory")
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     ack = await loop.run_in_executor(None, client.send_command, f"LOAD {path}")
     if ack is None:
-        raise HTTPException(503, f"stream {target} kernel not responding")
+        raise HTTPException(503, f"stream {stream} kernel not responding")
     if not ack.get("ok"):
         raise HTTPException(500, {"error": "load failed", "ack": ack})
-    log.info("stream %d: loaded dataset %s", target, filename)
+    log.info("stream %d: loaded dataset %s", stream, filename)
     return ack
 
 
 @router.get("/info/{name}")
 async def dataset_info(name: str):
-    """Return file metadata for a named .mxds file."""
+    """
+    Parse a .mxds file and return all ControllerStream metadata.
+    Response mirrors MOVA /api/dataset/info/{filename}.
+    """
+    import sys
+    if '/opt/MOVA' not in sys.path:
+        sys.path.insert(0, '/opt/MOVA')
+
     path = _ds_path(name)
     if not os.path.exists(path):
         raise HTTPException(404, f"{name} not found")
-    st = os.stat(path)
+
+    loop = asyncio.get_running_loop()
+    try:
+        from pci_mova.dataset.parser import load_all
+        all_streams = await loop.run_in_executor(None, load_all, path)
+    except Exception as exc:
+        raise HTTPException(422, f"Dataset parse error: {exc}")
+
     return {
-        "name":  name,
-        "size":  st.st_size,
-        "mtime": st.st_mtime,
-        "path":  path,
+        "filename": name,
+        "streams": {
+            sid: {
+                "stream_id": sid,
+                "title":     ds.header.title,
+                "stages":    len(ds.stages),
+                "links":     len(ds.links),
+                "detectors": len(ds.detectors),
+            }
+            for sid, ds in all_streams.items()
+        },
     }
 
 
